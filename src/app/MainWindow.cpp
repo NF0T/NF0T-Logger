@@ -2,15 +2,21 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QDir>
+#include <QHeaderView>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QSplitter>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include "core/logbook/QsoTableModel.h"
+#include "database/SqliteBackend.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -23,6 +29,8 @@ MainWindow::MainWindow(QWidget *parent)
     setupToolBar();
     setupCentralWidget();
     setupStatusBar();
+
+    openDefaultDatabase();
 }
 
 MainWindow::~MainWindow() = default;
@@ -69,10 +77,10 @@ void MainWindow::setupMenuBar()
 
     // --- Radio ---
     QMenu *radioMenu = menuBar()->addMenu(tr("&Radio"));
-    radioMenu->addAction(tr("Connect Hamlib..."))->setEnabled(false);   // placeholder
-    radioMenu->addAction(tr("Connect TCI..."))->setEnabled(false);      // placeholder
+    radioMenu->addAction(tr("Connect Hamlib..."))->setEnabled(false);
+    radioMenu->addAction(tr("Connect TCI..."))->setEnabled(false);
     radioMenu->addSeparator();
-    radioMenu->addAction(tr("Disconnect"))->setEnabled(false);          // placeholder
+    radioMenu->addAction(tr("Disconnect"))->setEnabled(false);
 
     // --- QSL ---
     QMenu *qslMenu = menuBar()->addMenu(tr("&QSL"));
@@ -87,7 +95,6 @@ void MainWindow::setupMenuBar()
 
     // --- Help ---
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
-
     m_aboutAction = new QAction(tr("&About NF0T Logger"), this);
     connect(m_aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
     helpMenu->addAction(m_aboutAction);
@@ -107,14 +114,21 @@ void MainWindow::setupCentralWidget()
 {
     m_splitter = new QSplitter(Qt::Vertical, this);
 
-    // Log table (top pane) — will be backed by a model in the next step
-    m_logView = new QTableView(m_splitter);
+    // Log table (top pane)
+    m_logModel = new QsoTableModel(this);
+    m_logView  = new QTableView(m_splitter);
+    m_logView->setModel(m_logModel);
     m_logView->setAlternatingRowColors(true);
     m_logView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_logView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_logView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_logView->setSortingEnabled(false);  // will enable once sort proxy is wired up
     m_logView->horizontalHeader()->setStretchLastSection(true);
+    m_logView->horizontalHeader()->setHighlightSections(false);
+    m_logView->verticalHeader()->hide();
+    m_logView->verticalHeader()->setDefaultSectionSize(22);
 
-    // Bottom pane — QSO entry widget (placeholder for now)
+    // Bottom pane — QSO entry widget (placeholder)
     QWidget *entryPlaceholder = new QWidget(m_splitter);
     entryPlaceholder->setMinimumHeight(120);
     QVBoxLayout *entryLayout = new QVBoxLayout(entryPlaceholder);
@@ -138,7 +152,51 @@ void MainWindow::setupStatusBar()
 }
 
 // ---------------------------------------------------------------------------
-// Slots (stubs — will be wired up in subsequent steps)
+// Database
+// ---------------------------------------------------------------------------
+
+void MainWindow::openDefaultDatabase()
+{
+    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QDir().mkpath(dataDir);
+    const QString dbPath = dataDir + "/log.db";
+
+    auto backend = std::make_unique<SqliteBackend>();
+    const QVariantMap config = {{"path", dbPath}};
+
+    if (!backend->open(config)) {
+        QMessageBox::critical(this, tr("Database Error"),
+            tr("Could not open database:\n%1").arg(backend->lastError()));
+        return;
+    }
+
+    if (!backend->initSchema()) {
+        QMessageBox::critical(this, tr("Database Error"),
+            tr("Schema initialisation failed:\n%1").arg(backend->lastError()));
+        return;
+    }
+
+    m_db = std::move(backend);
+    statusBar()->showMessage(tr("Database opened: %1").arg(dbPath), 4000);
+    reloadLog();
+}
+
+void MainWindow::reloadLog()
+{
+    if (!m_db) return;
+    m_logModel->setQsos(m_db->fetchQsos());
+    updateQsoCount();
+}
+
+void MainWindow::updateQsoCount()
+{
+    if (!m_db) return;
+    const int n = m_db->qsoCount();
+    m_qsoCountLabel->setText(tr("QSOs: %1").arg(n < 0 ? 0 : n));
+}
+
+// ---------------------------------------------------------------------------
+// Slots
 // ---------------------------------------------------------------------------
 
 void MainWindow::onNewLog()
