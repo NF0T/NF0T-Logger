@@ -15,6 +15,11 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <QFileDialog>
+#include <QProgressDialog>
+
+#include "core/adif/AdifParser.h"
+#include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
 #include "database/SqliteBackend.h"
 
@@ -206,12 +211,87 @@ void MainWindow::onNewLog()
 
 void MainWindow::onImportAdif()
 {
-    QMessageBox::information(this, tr("Import ADIF"), tr("ADIF import coming soon."));
+    if (!m_db) return;
+
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Import ADIF"), QString(),
+        tr("ADIF Files (*.adi *.adif);;All Files (*)"));
+    if (path.isEmpty()) return;
+
+    QProgressDialog progress(tr("Parsing ADIF file…"), tr("Cancel"), 0, 0, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(300);
+    progress.setValue(0);
+    qApp->processEvents();
+
+    const AdifParser::Result parsed = AdifParser::parseFile(path);
+
+    int imported = 0, duplicates = 0, errors = 0;
+    QStringList errorDetails = parsed.warnings;
+
+    progress.setMaximum(parsed.qsos.size());
+    for (int i = 0; i < parsed.qsos.size(); ++i) {
+        if (progress.wasCanceled()) break;
+        progress.setValue(i);
+
+        Qso qso = parsed.qsos.at(i);
+        if (!m_db->insertQso(qso)) {
+            const QString err = m_db->lastError();
+            // Unique constraint violations are expected for duplicates
+            if (err.contains("UNIQUE", Qt::CaseInsensitive) ||
+                err.contains("Duplicate", Qt::CaseInsensitive)) {
+                ++duplicates;
+            } else {
+                ++errors;
+                errorDetails << QString("Insert failed for %1: %2").arg(qso.callsign, err);
+            }
+        } else {
+            ++imported;
+        }
+    }
+    progress.setValue(parsed.qsos.size());
+
+    reloadLog();
+
+    QString summary = tr("Import complete.\n\nImported: %1\nDuplicates skipped: %2\n"
+                         "Parse errors: %3\nDB errors: %4")
+                          .arg(imported).arg(duplicates)
+                          .arg(parsed.skipped).arg(errors);
+
+    if (errorDetails.isEmpty()) {
+        QMessageBox::information(this, tr("ADIF Import"), summary);
+    } else {
+        QMessageBox *box = new QMessageBox(QMessageBox::Warning, tr("ADIF Import"),
+                                           summary, QMessageBox::Ok, this);
+        box->setDetailedText(errorDetails.join('\n'));
+        box->exec();
+    }
 }
 
 void MainWindow::onExportAdif()
 {
-    QMessageBox::information(this, tr("Export ADIF"), tr("ADIF export coming soon."));
+    if (!m_db) return;
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export ADIF"), QString(),
+        tr("ADIF Files (*.adi);;All Files (*)"));
+    if (path.isEmpty()) return;
+
+    const QList<Qso> qsos = m_db->fetchQsos();
+    if (qsos.isEmpty()) {
+        QMessageBox::information(this, tr("ADIF Export"), tr("No contacts to export."));
+        return;
+    }
+
+    AdifWriter::Options opts;
+    if (!AdifWriter::writeFile(path, qsos, opts)) {
+        QMessageBox::critical(this, tr("ADIF Export"),
+                              tr("Failed to write file:\n%1").arg(path));
+        return;
+    }
+
+    QMessageBox::information(this, tr("ADIF Export"),
+        tr("Exported %1 contact(s) to:\n%2").arg(qsos.size()).arg(path));
 }
 
 void MainWindow::onSettingsDialog()

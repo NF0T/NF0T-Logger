@@ -2,6 +2,8 @@ set(SOURCES
     main.cpp
     app/MainWindow.cpp
     core/logbook/QsoTableModel.cpp
+    core/adif/AdifParser.cpp
+    core/adif/AdifWriter.cpp
     database/SqlBackendBase.cpp
     database/SqliteBackend.cpp
     database/MariaDbBackend.cpp
@@ -12,6 +14,8 @@ set(HEADERS
     core/logbook/Qso.h
     core/logbook/QsoFilter.h
     core/logbook/QsoTableModel.h
+    core/adif/AdifParser.h
+    core/adif/AdifWriter.h
     database/DatabaseInterface.h
     database/SqlBackendBase.h
     database/SqliteBackend.h
