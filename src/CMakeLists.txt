@@ -1,6 +1,14 @@
 set(SOURCES
     main.cpp
     app/MainWindow.cpp
+    app/settings/SecureSettings.cpp
+    app/settings/Settings.cpp
+    app/settings/SettingsDialog.cpp
+    app/settings/pages/StationPage.cpp
+    app/settings/pages/EquipmentPage.cpp
+    app/settings/pages/DatabasePage.cpp
+    app/settings/pages/RadioPage.cpp
+    app/settings/pages/QslPage.cpp
     core/logbook/QsoTableModel.cpp
     core/adif/AdifParser.cpp
     core/adif/AdifWriter.cpp
@@ -11,6 +19,15 @@ set(SOURCES
 
 set(HEADERS
     app/MainWindow.h
+    app/settings/SecureSettings.h
+    app/settings/Settings.h
+    app/settings/SettingsDialog.h
+    app/settings/pages/SettingsPage.h
+    app/settings/pages/StationPage.h
+    app/settings/pages/EquipmentPage.h
+    app/settings/pages/DatabasePage.h
+    app/settings/pages/RadioPage.h
+    app/settings/pages/QslPage.h
     core/logbook/Qso.h
     core/logbook/QsoFilter.h
     core/logbook/QsoTableModel.h
@@ -37,6 +54,7 @@ target_link_libraries(NF0T-Logger PRIVATE
     Qt6::Network
     Qt6::Sql
     Qt6::WebSockets
+    qt6keychain
 )
 
 if(HAMLIB_FOUND)

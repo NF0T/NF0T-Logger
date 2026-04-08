@@ -15,9 +15,13 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <QCloseEvent>
 #include <QFileDialog>
 #include <QProgressDialog>
 
+#include "app/settings/SecureSettings.h"
+#include "app/settings/Settings.h"
+#include "app/settings/SettingsDialog.h"
 #include "core/adif/AdifParser.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
@@ -35,10 +39,42 @@ MainWindow::MainWindow(QWidget *parent)
     setupCentralWidget();
     setupStatusBar();
 
+    // Restore window geometry before showing
+    const QByteArray geo   = Settings::instance().mainWindowGeometry();
+    const QByteArray state = Settings::instance().mainWindowState();
+    if (!geo.isEmpty())   restoreGeometry(geo);
+    if (!state.isEmpty()) restoreState(state);
+
+    // Show credential-load status; enable QSL/radio menus once loaded
+    connect(&SecureSettings::instance(), &SecureSettings::loaded, this, [this]() {
+        statusBar()->showMessage(tr("Credentials loaded."), 2000);
+    });
+    connect(&SecureSettings::instance(), &SecureSettings::error, this,
+            [this](const QString &key, const QString &msg) {
+        statusBar()->showMessage(tr("Keychain error (%1): %2").arg(key, msg), 5000);
+    });
+
+    // First-run: require station callsign before opening the log
+    if (Settings::instance().stationCallsign().isEmpty()) {
+        auto *dlg = new SettingsDialog(this);
+        dlg->showPage(SettingsDialog::Station);
+        dlg->setWindowTitle(tr("Settings — please enter your station callsign"));
+        dlg->exec();
+    }
+
     openDefaultDatabase();
 }
 
 MainWindow::~MainWindow() = default;
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    Settings::instance().setMainWindowGeometry(saveGeometry());
+    Settings::instance().setMainWindowState(saveState());
+    if (m_splitter)
+        Settings::instance().setSplitterState(m_splitter->saveState());
+    QMainWindow::closeEvent(event);
+}
 
 // ---------------------------------------------------------------------------
 // Setup helpers
@@ -296,7 +332,10 @@ void MainWindow::onExportAdif()
 
 void MainWindow::onSettingsDialog()
 {
-    QMessageBox::information(this, tr("Settings"), tr("Settings dialog coming soon."));
+    SettingsDialog dlg(this);
+    dlg.exec();
+    // Refresh status bar callsign if station settings changed
+    updateQsoCount();
 }
 
 void MainWindow::onAbout()

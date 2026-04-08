@@ -17,6 +17,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Sql WebSockets)
 qt_standard_project_setup()
 
+# qtkeychain — secure credential storage (KWallet / libsecret / macOS Keychain)
+find_package(Qt6Keychain REQUIRED)
+message(STATUS "Qt6Keychain found — secure credential storage enabled")
+
 # Optional: Hamlib for CAT radio control
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
