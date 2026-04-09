@@ -4,6 +4,7 @@
 #include <QChar>
 #include <QDate>
 #include <QDateTime>
+#include <QMetaType>
 #include <QString>
 
 /// Represents a single amateur radio contact (QSO).
@@ -156,3 +157,5 @@ struct Qso
     QString   notes;         // notes
     QString   qsoComplete;   // qso_complete
 };
+
+Q_DECLARE_METATYPE(Qso)

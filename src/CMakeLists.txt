@@ -16,6 +16,10 @@ set(SOURCES
     ui/entrypanel/QsoEntryPanel.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
+    qsl/LoTwService.cpp
+    qsl/EqslService.cpp
+    qsl/QrzService.cpp
+    qsl/ClubLogService.cpp
     database/SqlBackendBase.cpp
     database/SqliteBackend.cpp
     database/MariaDbBackend.cpp
@@ -41,6 +45,11 @@ set(HEADERS
     ui/entrypanel/QsoEntryPanel.h
     radio/HamlibBackend.h
     radio/TciBackend.h
+    qsl/QslService.h
+    qsl/LoTwService.h
+    qsl/EqslService.h
+    qsl/QrzService.h
+    qsl/ClubLogService.h
     database/DatabaseInterface.h
     database/SqlBackendBase.h
     database/SqliteBackend.h
