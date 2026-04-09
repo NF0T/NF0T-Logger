@@ -23,7 +23,7 @@ RadioPage::RadioPage(QWidget *parent)
     m_hamlibEnabled = new QCheckBox(tr("Enable Hamlib radio control"), hamlibWidget);
 
     m_rigModel = new QSpinBox(hamlibWidget);
-    m_rigModel->setRange(1, 9999);
+    m_rigModel->setRange(1, 99999);
     m_rigModel->setToolTip(tr("Hamlib rig model number (see rigctl --list)"));
 
     m_connType = new QComboBox(hamlibWidget);
