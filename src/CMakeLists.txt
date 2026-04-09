@@ -15,6 +15,7 @@ set(SOURCES
     core/BandPlan.cpp
     ui/entrypanel/QsoEntryPanel.cpp
     radio/HamlibBackend.cpp
+    radio/TciBackend.cpp
     database/SqlBackendBase.cpp
     database/SqliteBackend.cpp
     database/MariaDbBackend.cpp
@@ -39,6 +40,7 @@ set(HEADERS
     core/BandPlan.h
     ui/entrypanel/QsoEntryPanel.h
     radio/HamlibBackend.h
+    radio/TciBackend.h
     database/DatabaseInterface.h
     database/SqlBackendBase.h
     database/SqliteBackend.h

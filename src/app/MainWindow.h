@@ -13,6 +13,7 @@ class HamlibBackend;
 class Qso;
 class QsoEntryPanel;
 class QsoTableModel;
+class TciBackend;
 
 class MainWindow : public QMainWindow
 {
@@ -33,6 +34,7 @@ private slots:
     void onAbout();
     void onQsoReady(const Qso &qso);
     void onConnectHamlib();
+    void onConnectTci();
     void onDisconnectRadio();
 
 private:
@@ -49,8 +51,9 @@ private:
     std::unique_ptr<DatabaseInterface> m_db;
     QsoTableModel *m_logModel = nullptr;
 
-    // Radio backend
+    // Radio backends
     HamlibBackend *m_hamlibBackend = nullptr;
+    TciBackend    *m_tciBackend    = nullptr;
 
     // Central layout
     QSplitter     *m_splitter   = nullptr;
@@ -69,5 +72,6 @@ private:
     QAction *m_settingsAction        = nullptr;
     QAction *m_aboutAction           = nullptr;
     QAction *m_connectHamlibAction   = nullptr;
+    QAction *m_connectTciAction      = nullptr;
     QAction *m_disconnectRadioAction = nullptr;
 };

@@ -26,6 +26,7 @@
 #include "core/logbook/QsoTableModel.h"
 #include "database/SqliteBackend.h"
 #include "radio/HamlibBackend.h"
+#include "radio/TciBackend.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -90,6 +91,34 @@ MainWindow::MainWindow(QWidget *parent)
     // Auto-connect on startup if Hamlib was previously enabled
     if (Settings::instance().hamlibEnabled())
         m_hamlibBackend->connectRig();
+
+    // TCI backend
+    m_tciBackend = new TciBackend(this);
+    connect(m_tciBackend, &TciBackend::freqChanged,
+            m_entryPanel, &QsoEntryPanel::setRadioFreq);
+    connect(m_tciBackend, &TciBackend::modeChanged,
+            m_entryPanel, &QsoEntryPanel::setRadioMode);
+    connect(m_tciBackend, &TciBackend::connected, this, [this]() {
+        m_radioStatusLabel->setText(tr("Radio: Connected (TCI)"));
+        m_connectTciAction->setEnabled(false);
+        m_connectHamlibAction->setEnabled(false);
+        m_disconnectRadioAction->setEnabled(true);
+        statusBar()->showMessage(tr("TCI connected."), 3000);
+    });
+    connect(m_tciBackend, &TciBackend::disconnected, this, [this]() {
+        m_radioStatusLabel->setText(tr("Radio: Not connected"));
+        m_connectTciAction->setEnabled(true);
+        m_connectHamlibAction->setEnabled(true);
+        m_disconnectRadioAction->setEnabled(false);
+        statusBar()->showMessage(tr("TCI disconnected."), 3000);
+    });
+    connect(m_tciBackend, &TciBackend::error, this, [this](const QString &msg) {
+        statusBar()->showMessage(tr("TCI error: %1").arg(msg), 6000);
+    });
+
+    // Auto-connect on startup if TCI was previously enabled
+    if (Settings::instance().tciEnabled())
+        m_tciBackend->connectTci();
 }
 
 MainWindow::~MainWindow() = default;
@@ -150,7 +179,9 @@ void MainWindow::setupMenuBar()
     connect(m_connectHamlibAction, &QAction::triggered, this, &MainWindow::onConnectHamlib);
     radioMenu->addAction(m_connectHamlibAction);
 
-    radioMenu->addAction(tr("Connect &TCI..."))->setEnabled(false);
+    m_connectTciAction = new QAction(tr("Connect &TCI..."), this);
+    connect(m_connectTciAction, &QAction::triggered, this, &MainWindow::onConnectTci);
+    radioMenu->addAction(m_connectTciAction);
 
     radioMenu->addSeparator();
 
@@ -392,9 +423,20 @@ void MainWindow::onConnectHamlib()
     m_hamlibBackend->connectRig();
 }
 
+void MainWindow::onConnectTci()
+{
+    if (!Settings::instance().tciEnabled()) {
+        QMessageBox::information(this, tr("TCI"),
+            tr("TCI is not enabled. Enable it in Settings → Radio."));
+        return;
+    }
+    m_tciBackend->connectTci();
+}
+
 void MainWindow::onDisconnectRadio()
 {
     m_hamlibBackend->disconnectRig();
+    m_tciBackend->disconnectTci();
 }
 
 void MainWindow::onQsoReady(const Qso &qso)
