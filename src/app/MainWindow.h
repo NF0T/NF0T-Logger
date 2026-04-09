@@ -9,6 +9,7 @@ class QSplitter;
 class QTableView;
 
 class DatabaseInterface;
+class HamlibBackend;
 class Qso;
 class QsoEntryPanel;
 class QsoTableModel;
@@ -31,6 +32,8 @@ private slots:
     void onSettingsDialog();
     void onAbout();
     void onQsoReady(const Qso &qso);
+    void onConnectHamlib();
+    void onDisconnectRadio();
 
 private:
     void setupMenuBar();
@@ -46,6 +49,9 @@ private:
     std::unique_ptr<DatabaseInterface> m_db;
     QsoTableModel *m_logModel = nullptr;
 
+    // Radio backend
+    HamlibBackend *m_hamlibBackend = nullptr;
+
     // Central layout
     QSplitter     *m_splitter   = nullptr;
     QTableView    *m_logView    = nullptr;
@@ -56,10 +62,12 @@ private:
     QLabel *m_qsoCountLabel    = nullptr;
 
     // Actions
-    QAction *m_newLogAction     = nullptr;
-    QAction *m_importAdifAction = nullptr;
-    QAction *m_exportAdifAction = nullptr;
-    QAction *m_exitAction       = nullptr;
-    QAction *m_settingsAction   = nullptr;
-    QAction *m_aboutAction      = nullptr;
+    QAction *m_newLogAction          = nullptr;
+    QAction *m_importAdifAction      = nullptr;
+    QAction *m_exportAdifAction      = nullptr;
+    QAction *m_exitAction            = nullptr;
+    QAction *m_settingsAction        = nullptr;
+    QAction *m_aboutAction           = nullptr;
+    QAction *m_connectHamlibAction   = nullptr;
+    QAction *m_disconnectRadioAction = nullptr;
 };

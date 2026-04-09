@@ -14,6 +14,7 @@ set(SOURCES
     core/adif/AdifWriter.cpp
     core/BandPlan.cpp
     ui/entrypanel/QsoEntryPanel.cpp
+    radio/HamlibBackend.cpp
     database/SqlBackendBase.cpp
     database/SqliteBackend.cpp
     database/MariaDbBackend.cpp
@@ -37,6 +38,7 @@ set(HEADERS
     core/adif/AdifWriter.h
     core/BandPlan.h
     ui/entrypanel/QsoEntryPanel.h
+    radio/HamlibBackend.h
     database/DatabaseInterface.h
     database/SqlBackendBase.h
     database/SqliteBackend.h

@@ -25,6 +25,7 @@
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
 #include "database/SqliteBackend.h"
+#include "radio/HamlibBackend.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -63,6 +64,32 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     openDefaultDatabase();
+
+    // Create the Hamlib backend (does not connect — user initiates via menu)
+    m_hamlibBackend = new HamlibBackend(this);
+    connect(m_hamlibBackend, &HamlibBackend::freqChanged,
+            m_entryPanel,    &QsoEntryPanel::setRadioFreq);
+    connect(m_hamlibBackend, &HamlibBackend::modeChanged,
+            m_entryPanel,    &QsoEntryPanel::setRadioMode);
+    connect(m_hamlibBackend, &HamlibBackend::connected, this, [this]() {
+        m_radioStatusLabel->setText(tr("Radio: Connected (Hamlib)"));
+        m_connectHamlibAction->setEnabled(false);
+        m_disconnectRadioAction->setEnabled(true);
+        statusBar()->showMessage(tr("Hamlib connected."), 3000);
+    });
+    connect(m_hamlibBackend, &HamlibBackend::disconnected, this, [this]() {
+        m_radioStatusLabel->setText(tr("Radio: Not connected"));
+        m_connectHamlibAction->setEnabled(true);
+        m_disconnectRadioAction->setEnabled(false);
+        statusBar()->showMessage(tr("Radio disconnected."), 3000);
+    });
+    connect(m_hamlibBackend, &HamlibBackend::error, this, [this](const QString &msg) {
+        statusBar()->showMessage(tr("Radio error: %1").arg(msg), 6000);
+    });
+
+    // Auto-connect on startup if Hamlib was previously enabled
+    if (Settings::instance().hamlibEnabled())
+        m_hamlibBackend->connectRig();
 }
 
 MainWindow::~MainWindow() = default;
@@ -118,10 +145,19 @@ void MainWindow::setupMenuBar()
 
     // --- Radio ---
     QMenu *radioMenu = menuBar()->addMenu(tr("&Radio"));
-    radioMenu->addAction(tr("Connect Hamlib..."))->setEnabled(false);
-    radioMenu->addAction(tr("Connect TCI..."))->setEnabled(false);
+
+    m_connectHamlibAction = new QAction(tr("Connect &Hamlib..."), this);
+    connect(m_connectHamlibAction, &QAction::triggered, this, &MainWindow::onConnectHamlib);
+    radioMenu->addAction(m_connectHamlibAction);
+
+    radioMenu->addAction(tr("Connect &TCI..."))->setEnabled(false);
+
     radioMenu->addSeparator();
-    radioMenu->addAction(tr("Disconnect"))->setEnabled(false);
+
+    m_disconnectRadioAction = new QAction(tr("&Disconnect"), this);
+    m_disconnectRadioAction->setEnabled(false);
+    connect(m_disconnectRadioAction, &QAction::triggered, this, &MainWindow::onDisconnectRadio);
+    radioMenu->addAction(m_disconnectRadioAction);
 
     // --- QSL ---
     QMenu *qslMenu = menuBar()->addMenu(tr("&QSL"));
@@ -344,6 +380,21 @@ void MainWindow::onAbout()
            "Amateur Radio Contact Logger<br><br>"
            "Built with C++ and Qt6.")
     );
+}
+
+void MainWindow::onConnectHamlib()
+{
+    if (!Settings::instance().hamlibEnabled()) {
+        QMessageBox::information(this, tr("Hamlib"),
+            tr("Hamlib is not enabled. Enable it in Settings → Radio."));
+        return;
+    }
+    m_hamlibBackend->connectRig();
+}
+
+void MainWindow::onDisconnectRadio()
+{
+    m_hamlibBackend->disconnectRig();
 }
 
 void MainWindow::onQsoReady(const Qso &qso)
