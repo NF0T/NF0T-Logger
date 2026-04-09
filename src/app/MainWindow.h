@@ -9,6 +9,8 @@ class QSplitter;
 class QTableView;
 
 class DatabaseInterface;
+class Qso;
+class QsoEntryPanel;
 class QsoTableModel;
 
 class MainWindow : public QMainWindow
@@ -28,6 +30,7 @@ private slots:
     void onExportAdif();
     void onSettingsDialog();
     void onAbout();
+    void onQsoReady(const Qso &qso);
 
 private:
     void setupMenuBar();
@@ -44,8 +47,9 @@ private:
     QsoTableModel *m_logModel = nullptr;
 
     // Central layout
-    QSplitter  *m_splitter  = nullptr;
-    QTableView *m_logView   = nullptr;
+    QSplitter     *m_splitter   = nullptr;
+    QTableView    *m_logView    = nullptr;
+    QsoEntryPanel *m_entryPanel = nullptr;
 
     // Status bar labels
     QLabel *m_radioStatusLabel = nullptr;

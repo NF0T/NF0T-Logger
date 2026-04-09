@@ -12,6 +12,8 @@ set(SOURCES
     core/logbook/QsoTableModel.cpp
     core/adif/AdifParser.cpp
     core/adif/AdifWriter.cpp
+    core/BandPlan.cpp
+    ui/entrypanel/QsoEntryPanel.cpp
     database/SqlBackendBase.cpp
     database/SqliteBackend.cpp
     database/MariaDbBackend.cpp
@@ -33,6 +35,8 @@ set(HEADERS
     core/logbook/QsoTableModel.h
     core/adif/AdifParser.h
     core/adif/AdifWriter.h
+    core/BandPlan.h
+    ui/entrypanel/QsoEntryPanel.h
     database/DatabaseInterface.h
     database/SqlBackendBase.h
     database/SqliteBackend.h

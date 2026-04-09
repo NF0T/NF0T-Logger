@@ -42,6 +42,7 @@ public:
     // Data management
     void setQsos    (const QList<Qso> &qsos);
     void appendQso  (const Qso &qso);
+    void prependQso (const Qso &qso);
     void updateQso  (int row, const Qso &qso);
     void removeQso  (int row);
     void clear      ();

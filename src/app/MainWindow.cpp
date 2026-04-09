@@ -12,7 +12,6 @@
 #include <QStatusBar>
 #include <QTableView>
 #include <QToolBar>
-#include <QVBoxLayout>
 #include <QWidget>
 
 #include <QCloseEvent>
@@ -26,6 +25,7 @@
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
 #include "database/SqliteBackend.h"
+#include "ui/entrypanel/QsoEntryPanel.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -169,14 +169,12 @@ void MainWindow::setupCentralWidget()
     m_logView->verticalHeader()->hide();
     m_logView->verticalHeader()->setDefaultSectionSize(22);
 
-    // Bottom pane — QSO entry widget (placeholder)
-    QWidget *entryPlaceholder = new QWidget(m_splitter);
-    entryPlaceholder->setMinimumHeight(120);
-    QVBoxLayout *entryLayout = new QVBoxLayout(entryPlaceholder);
-    entryLayout->addWidget(new QLabel(tr("QSO Entry — coming soon"), entryPlaceholder));
+    // Bottom pane — QSO entry panel
+    m_entryPanel = new QsoEntryPanel(m_splitter);
+    connect(m_entryPanel, &QsoEntryPanel::qsoReady, this, &MainWindow::onQsoReady);
 
     m_splitter->addWidget(m_logView);
-    m_splitter->addWidget(entryPlaceholder);
+    m_splitter->addWidget(m_entryPanel);
     m_splitter->setStretchFactor(0, 3);
     m_splitter->setStretchFactor(1, 1);
 
@@ -346,4 +344,21 @@ void MainWindow::onAbout()
            "Amateur Radio Contact Logger<br><br>"
            "Built with C++ and Qt6.")
     );
+}
+
+void MainWindow::onQsoReady(const Qso &qso)
+{
+    if (!m_db) return;
+
+    Qso inserted = qso;
+    if (!m_db->insertQso(inserted)) {
+        statusBar()->showMessage(
+            tr("Failed to log contact: %1").arg(m_db->lastError()), 5000);
+        return;
+    }
+
+    m_logModel->prependQso(inserted);
+    updateQsoCount();
+    statusBar()->showMessage(
+        tr("Logged: %1").arg(inserted.callsign), 3000);
 }

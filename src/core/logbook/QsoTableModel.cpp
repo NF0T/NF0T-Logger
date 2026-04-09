@@ -111,6 +111,13 @@ void QsoTableModel::appendQso(const Qso &qso)
     endInsertRows();
 }
 
+void QsoTableModel::prependQso(const Qso &qso)
+{
+    beginInsertRows({}, 0, 0);
+    m_qsos.prepend(qso);
+    endInsertRows();
+}
+
 void QsoTableModel::updateQso(int row, const Qso &qso)
 {
     if (row < 0 || row >= m_qsos.size())
