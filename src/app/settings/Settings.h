@@ -149,6 +149,9 @@ public:
     QString lotwCallsign() const;
     void    setLotwCallsign(const QString &v);
 
+    QString lotwStationLocation() const;
+    void    setLotwStationLocation(const QString &v);
+
     // Secure
     QString lotwPassword() const;
     void    setLotwPassword(const QString &v);

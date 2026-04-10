@@ -187,6 +187,9 @@ void Settings::setLotwTqslPath(const QString &v)    { put("qsl/lotw/tqslpath", v
 QString Settings::lotwCallsign() const      { return get("qsl/lotw/callsign", QString()); }
 void Settings::setLotwCallsign(const QString &v)    { put("qsl/lotw/callsign", v); }
 
+QString Settings::lotwStationLocation() const           { return get("qsl/lotw/station_location", QString()); }
+void Settings::setLotwStationLocation(const QString &v) { put("qsl/lotw/station_location", v); }
+
 QString Settings::lotwPassword() const      { return SecureSettings::instance().get(SecureKey::LOTW_PASSWORD); }
 void Settings::setLotwPassword(const QString &v)    { SecureSettings::instance().set(SecureKey::LOTW_PASSWORD, v); }
 

@@ -67,15 +67,20 @@ void LoTwService::startUpload(const QList<Qso> &allQsos)
     m_tempFile->close();
 
     // Build TQSL command
-    const QString tqslPath  = Settings::instance().lotwTqslPath();
-    const QString stationCs = Settings::instance().lotwCallsign().isEmpty()
-                                  ? Settings::instance().stationCallsign()
-                                  : Settings::instance().lotwCallsign();
+    const QString tqslPath       = Settings::instance().lotwTqslPath();
+    const QString stationLocation = Settings::instance().lotwStationLocation();
+
+    if (stationLocation.isEmpty()) {
+        emit uploadFinished({}, {tr("LoTW station location not set. "
+                                    "Enter the exact name from TQSL → Station Locations in Settings → QSL Services → LoTW.")});
+        m_pendingUpload.clear();
+        return;
+    }
 
     QStringList args;
     args << QStringLiteral("-x")           // non-interactive
          << QStringLiteral("-a") << QStringLiteral("compliant")
-         << QStringLiteral("-l") << stationCs
+         << QStringLiteral("-l") << stationLocation
          << tempPath;
 
     m_tqsl = new QProcess(this);

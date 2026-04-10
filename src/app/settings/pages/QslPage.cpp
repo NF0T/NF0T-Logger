@@ -34,12 +34,14 @@ QslPage::QslPage(QWidget *parent)
     // LoTW tab
     // -----------------------------------------------------------------------
     auto *lotwWidget = new QWidget;
-    m_lotwEnabled  = new QCheckBox(tr("Enable LoTW integration"), lotwWidget);
-    m_tqslPath     = new QLineEdit(lotwWidget);
+    m_lotwEnabled         = new QCheckBox(tr("Enable LoTW integration"), lotwWidget);
+    m_tqslPath            = new QLineEdit(lotwWidget);
     m_tqslPath->setPlaceholderText("/usr/bin/tqsl");
-    m_lotwCallsign = new QLineEdit(lotwWidget);
-    m_lotwCallsign->setPlaceholderText(tr("Certificate callsign"));
-    m_lotwPassword = makePasswordField(lotwWidget);
+    m_lotwCallsign        = new QLineEdit(lotwWidget);
+    m_lotwCallsign->setPlaceholderText(tr("Certificate callsign (for download login)"));
+    m_lotwStationLocation = new QLineEdit(lotwWidget);
+    m_lotwStationLocation->setPlaceholderText(tr("Exact name from TQSL Station Locations"));
+    m_lotwPassword        = makePasswordField(lotwWidget);
 
     auto *tqslRow = new QHBoxLayout;
     tqslRow->addWidget(m_tqslPath, 1);
@@ -52,9 +54,10 @@ QslPage::QslPage(QWidget *parent)
 
     auto *lotwForm = new QFormLayout(lotwWidget);
     lotwForm->addRow(m_lotwEnabled);
-    lotwForm->addRow(tr("TQSL path:"),  tqslRow);
-    lotwForm->addRow(tr("Callsign:"),   m_lotwCallsign);
-    lotwForm->addRow(tr("Password:"),   m_lotwPassword);
+    lotwForm->addRow(tr("TQSL path:"),        tqslRow);
+    lotwForm->addRow(tr("Callsign:"),         m_lotwCallsign);
+    lotwForm->addRow(tr("Station location:"), m_lotwStationLocation);
+    lotwForm->addRow(tr("Password:"),         m_lotwPassword);
     lotwForm->addRow(keychainNote(lotwWidget));
 
     // -----------------------------------------------------------------------
@@ -123,6 +126,7 @@ void QslPage::load()
     m_lotwEnabled->setChecked(s.lotwEnabled());
     m_tqslPath->setText(s.lotwTqslPath());
     m_lotwCallsign->setText(s.lotwCallsign());
+    m_lotwStationLocation->setText(s.lotwStationLocation());
     m_lotwPassword->setText(s.lotwPassword());
 
     m_eqslEnabled->setChecked(s.eqslEnabled());
@@ -148,6 +152,7 @@ void QslPage::apply()
     s.setLotwEnabled(m_lotwEnabled->isChecked());
     s.setLotwTqslPath(m_tqslPath->text().trimmed());
     s.setLotwCallsign(m_lotwCallsign->text().toUpper().trimmed());
+    s.setLotwStationLocation(m_lotwStationLocation->text().trimmed());
     s.setLotwPassword(m_lotwPassword->text());
 
     s.setEqslEnabled(m_eqslEnabled->isChecked());

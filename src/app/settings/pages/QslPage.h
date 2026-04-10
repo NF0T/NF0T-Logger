@@ -18,10 +18,11 @@ public:
 
 private:
     // LoTW
-    QCheckBox *m_lotwEnabled   = nullptr;
-    QLineEdit *m_tqslPath      = nullptr;
-    QLineEdit *m_lotwCallsign  = nullptr;
-    QLineEdit *m_lotwPassword  = nullptr;
+    QCheckBox *m_lotwEnabled          = nullptr;
+    QLineEdit *m_tqslPath             = nullptr;
+    QLineEdit *m_lotwCallsign         = nullptr;
+    QLineEdit *m_lotwStationLocation  = nullptr;
+    QLineEdit *m_lotwPassword         = nullptr;
 
     // eQSL
     QCheckBox *m_eqslEnabled   = nullptr;
