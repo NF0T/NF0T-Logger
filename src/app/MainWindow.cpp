@@ -260,6 +260,7 @@ void MainWindow::setupMenuBar()
 void MainWindow::setupToolBar()
 {
     QToolBar *toolBar = addToolBar(tr("Main Toolbar"));
+    toolBar->setObjectName(QStringLiteral("mainToolBar"));
     toolBar->setMovable(false);
     toolBar->addAction(m_newLogAction);
     toolBar->addSeparator();

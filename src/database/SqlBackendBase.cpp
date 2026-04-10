@@ -249,6 +249,7 @@ SqlBackendBase::SqlBackendBase()
 SqlBackendBase::~SqlBackendBase()
 {
     close();
+    m_db = QSqlDatabase(); // release the handle before removeDatabase()
     QSqlDatabase::removeDatabase(m_connectionName);
 }
 
