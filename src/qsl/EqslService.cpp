@@ -173,6 +173,9 @@ void EqslService::onDownloadReply()
 
     emit logMessage(tr("Received %1 byte(s) from eQSL.").arg(body.size()));
 
+    // Log the first 500 characters of the raw response to aid diagnosis
+    emit logMessage(tr("Response preview: %1").arg(body.left(500).trimmed()));
+
     if (body.contains(QLatin1String("Error"), Qt::CaseInsensitive) &&
         !body.contains(QLatin1String("<call:"), Qt::CaseInsensitive)) {
         const QString err = tr("eQSL download error: %1").arg(body.trimmed());
@@ -182,6 +185,12 @@ void EqslService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(body);
+
+    if (!parsed.warnings.isEmpty()) {
+        emit logMessage(tr("Parser warnings:"));
+        for (const QString &w : parsed.warnings)
+            emit logMessage(tr("  %1").arg(w));
+    }
 
     // We requested ConfirmedOnly=1, so every returned record is confirmed.
     // eQSL's ADIF does not carry EQSL_QSL_RCVD:1:Y, so force it explicitly.
