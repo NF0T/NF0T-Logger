@@ -182,12 +182,24 @@ void QrzService::onDownloadReply()
 
     const QString adif = response.queryItemValue(QStringLiteral("DATA"));
     if (adif.isEmpty()) {
-        emit downloadFinished({}, {});
+        emit downloadFinished({}, {tr("QRZ: no new confirmations found.")});
         return;
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(adif);
-    emit downloadFinished(parsed.qsos, parsed.warnings);
+
+    // STATUS:CONFIRMED means every returned QSO is confirmed by the other station.
+    // QRZ's ADIF uses APP_QRZLOG_STATUS=C rather than our APP_NF0T_QRZ_QSL_RCVD,
+    // so set qrzQslRcvd explicitly on all returned records.
+    const QDate today = QDate::currentDate();
+    QList<Qso> confirmed = parsed.qsos;
+    for (Qso &q : confirmed) {
+        q.qrzQslRcvd = 'Y';
+        if (!q.qrzRcvdDate.isValid())
+            q.qrzRcvdDate = today;
+    }
+
+    emit downloadFinished(confirmed, parsed.warnings);
 }
 
 // ---------------------------------------------------------------------------
