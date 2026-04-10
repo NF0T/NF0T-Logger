@@ -199,9 +199,9 @@ Qso Log4OmMigrator::rowToQso(const QSqlQuery &q)
     if (!qso.datetimeOff.isNull())
         qso.datetimeOff = qso.datetimeOff.toTimeZone(QTimeZone::utc());
 
-    // Frequency
-    qso.freq = q.value(QLatin1String("freq")).toDouble();
-    if (const auto v = dbl("freqrx"); v && *v > 0.0) qso.freqRx = v;
+    // Frequency — Log4OM stores in kHz; NF0T Logger uses MHz
+    qso.freq = q.value(QLatin1String("freq")).toDouble() / 1000.0;
+    if (const auto v = dbl("freqrx"); v && *v > 0.0) qso.freqRx = *v / 1000.0;
 
     // Exchange
     qso.rstSent = str("rstsent");
