@@ -375,15 +375,15 @@ void MainWindow::openDefaultDatabase()
     auto backend = std::make_unique<SqliteBackend>();
     const QVariantMap config = {{"path", dbPath}};
 
-    if (!backend->open(config)) {
+    if (auto r = backend->open(config); !r) {
         QMessageBox::critical(this, tr("Database Error"),
-            tr("Could not open database:\n%1").arg(backend->lastError()));
+            tr("Could not open database:\n%1").arg(r.error()));
         return;
     }
 
-    if (!backend->initSchema()) {
+    if (auto r = backend->initSchema(); !r) {
         QMessageBox::critical(this, tr("Database Error"),
-            tr("Schema initialisation failed:\n%1").arg(backend->lastError()));
+            tr("Schema initialisation failed:\n%1").arg(r.error()));
         return;
     }
 
@@ -395,15 +395,16 @@ void MainWindow::openDefaultDatabase()
 void MainWindow::reloadLog()
 {
     if (!m_db) return;
-    m_logModel->setQsos(m_db->fetchQsos());
+    if (auto r = m_db->fetchQsos())
+        m_logModel->setQsos(*r);
     updateQsoCount();
 }
 
 void MainWindow::updateQsoCount()
 {
     if (!m_db) return;
-    const int n = m_db->qsoCount();
-    m_qsoCountLabel->setText(tr("QSOs: %1").arg(n < 0 ? 0 : n));
+    const int n = m_db->qsoCount().value_or(0);
+    m_qsoCountLabel->setText(tr("QSOs: %1").arg(n));
 }
 
 // ---------------------------------------------------------------------------
@@ -441,8 +442,8 @@ void MainWindow::onImportAdif()
         progress.setValue(i);
 
         Qso qso = parsed.qsos.at(i);
-        if (!m_db->insertQso(qso)) {
-            const QString err = m_db->lastError();
+        if (auto r = m_db->insertQso(qso); !r) {
+            const QString &err = r.error();
             // Unique constraint violations are expected for duplicates
             if (err.contains("UNIQUE", Qt::CaseInsensitive) ||
                 err.contains("Duplicate", Qt::CaseInsensitive)) {
@@ -483,7 +484,7 @@ void MainWindow::onExportAdif()
         tr("ADIF Files (*.adi);;All Files (*)"));
     if (path.isEmpty()) return;
 
-    const QList<Qso> qsos = m_db->fetchQsos();
+    const QList<Qso> qsos = m_db->fetchQsos().value_or(QList<Qso>{});
     if (qsos.isEmpty()) {
         QMessageBox::information(this, tr("ADIF Export"), tr("No contacts to export."));
         return;
@@ -548,8 +549,6 @@ void MainWindow::onDisconnectRadio()
 // QSL slots
 // ---------------------------------------------------------------------------
 
-static QList<Qso> fetchAll(DatabaseInterface *db) { return db->fetchQsos(); }
-
 void MainWindow::onLotwUpload()
 {
     if (!m_db) return;
@@ -558,7 +557,7 @@ void MainWindow::onLotwUpload()
             tr("LoTW is not enabled. Enable it in Settings → QSL Services."));
         return;
     }
-    m_lotwService->startUpload(fetchAll(m_db.get()));
+    m_lotwService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
 }
 
 void MainWindow::onLotwDownload()
@@ -580,7 +579,7 @@ void MainWindow::onEqslUpload()
             tr("eQSL is not enabled. Enable it in Settings → QSL Services."));
         return;
     }
-    m_eqslService->startUpload(fetchAll(m_db.get()));
+    m_eqslService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
 }
 
 void MainWindow::onEqslDownload()
@@ -602,7 +601,7 @@ void MainWindow::onQrzUpload()
             tr("QRZ is not enabled. Enable it in Settings → QSL Services."));
         return;
     }
-    m_qrzService->startUpload(fetchAll(m_db.get()));
+    m_qrzService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
 }
 
 void MainWindow::onQrzDownload()
@@ -624,7 +623,7 @@ void MainWindow::onClubLogUpload()
             tr("ClubLog is not enabled. Enable it in Settings → QSL Services."));
         return;
     }
-    m_clublogService->startUpload(fetchAll(m_db.get()));
+    m_clublogService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
 }
 
 void MainWindow::qslUploadFinished(const QString &serviceName,
@@ -633,7 +632,7 @@ void MainWindow::qslUploadFinished(const QString &serviceName,
 {
     if (!updatedQsos.isEmpty()) {
         for (const Qso &q : updatedQsos)
-            m_db->updateQso(q);
+            std::ignore = m_db->updateQso(q);
         reloadLog();
     }
 
@@ -656,7 +655,7 @@ void MainWindow::qslDownloadFinished(const QString &serviceName,
     int updated = 0;
 
     if (!confirmed.isEmpty() && m_db) {
-        const QList<Qso> local = fetchAll(m_db.get());
+        const QList<Qso> local = m_db->fetchQsos().value_or(QList<Qso>{});
 
         for (const Qso &conf : confirmed) {
             // Match on callsign + date + band + mode
@@ -672,7 +671,7 @@ void MainWindow::qslDownloadFinished(const QString &serviceName,
                 if (conf.eqslQslRcvd == 'Y') { match.eqslQslRcvd = 'Y'; match.eqslRcvdDate = conf.eqslRcvdDate; }
                 if (conf.qrzQslRcvd  == 'Y') { match.qrzQslRcvd  = 'Y'; match.qrzRcvdDate  = conf.qrzRcvdDate; }
 
-                m_db->updateQso(match);
+                std::ignore = m_db->updateQso(match);
                 ++updated;
                 break;
             }
@@ -701,9 +700,9 @@ void MainWindow::onQsoReady(const Qso &qso)
     if (!m_db) return;
 
     Qso inserted = qso;
-    if (!m_db->insertQso(inserted)) {
+    if (auto r = m_db->insertQso(inserted); !r) {
         statusBar()->showMessage(
-            tr("Failed to log contact: %1").arg(m_db->lastError()), 5000);
+            tr("Failed to log contact: %1").arg(r.error()), 5000);
         return;
     }
 
@@ -724,9 +723,9 @@ void MainWindow::onEditQso(const QModelIndex &index)
     if (dlg.exec() != QDialog::Accepted) return;
 
     Qso updated = dlg.qso();
-    if (!m_db->updateQso(updated)) {
+    if (auto r = m_db->updateQso(updated); !r) {
         QMessageBox::warning(this, tr("Edit Failed"),
-            tr("Could not save changes:\n%1").arg(m_db->lastError()));
+            tr("Could not save changes:\n%1").arg(r.error()));
         return;
     }
 
@@ -752,9 +751,9 @@ void MainWindow::onDeleteSelectedQso()
 
     if (reply != QMessageBox::Yes) return;
 
-    if (!m_db->deleteQso(q.id)) {
+    if (auto r = m_db->deleteQso(q.id); !r) {
         QMessageBox::warning(this, tr("Delete Failed"),
-            tr("Could not delete QSO:\n%1").arg(m_db->lastError()));
+            tr("Could not delete QSO:\n%1").arg(r.error()));
         return;
     }
 

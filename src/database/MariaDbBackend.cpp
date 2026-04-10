@@ -1,10 +1,11 @@
 #include "MariaDbBackend.h"
 
+#include <expected>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 
-bool MariaDbBackend::open(const QVariantMap &config)
+std::expected<void, QString> MariaDbBackend::open(const QVariantMap &config)
 {
     m_db = QSqlDatabase::addDatabase("QMYSQL", m_connectionName);
     m_db.setHostName    (config.value("host",     "127.0.0.1").toString());
@@ -16,32 +17,29 @@ bool MariaDbBackend::open(const QVariantMap &config)
     // Enable UTF-8 and strict mode
     m_db.setConnectOptions("MYSQL_OPT_RECONNECT=1;MYSQL_SET_CHARSET_NAME=utf8mb4");
 
-    if (!m_db.open()) {
-        m_lastError = m_db.lastError().text();
-        return false;
-    }
-    return true;
+    if (!m_db.open())
+        return std::unexpected(m_db.lastError().text());
+    return {};
 }
 
-bool MariaDbBackend::initSchema()
+std::expected<void, QString> MariaDbBackend::initSchema()
 {
-    // --- schema_version ---
-    if (!execQuery(R"(
+    if (auto r = execQuery(R"(
         CREATE TABLE IF NOT EXISTS schema_version (
             version     INT      NOT NULL,
             applied_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    )")) return false;
+    )"); !r) return r;
 
     QSqlQuery vq(m_db);
     vq.exec("SELECT MAX(version) FROM schema_version");
     const int currentVersion = (vq.next() && !vq.value(0).isNull()) ? vq.value(0).toInt() : 0;
 
     if (currentVersion >= 1)
-        return true;
+        return {};
 
     // --- v1: main schema ---
-    const bool ok = execQuery(R"(
+    if (auto r = execQuery(R"(
         CREATE TABLE IF NOT EXISTS qsos (
             id                  BIGINT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
 
@@ -163,17 +161,13 @@ bool MariaDbBackend::initSchema()
             INDEX idx_station_call  (station_callsign),
             INDEX idx_sig_info      (sig, sig_info)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    )");
-
-    if (!ok) return false;
+    )"); !r) return r;
 
     QSqlQuery vins(m_db);
     vins.prepare("INSERT INTO schema_version (version) VALUES (:v)");
     vins.bindValue(":v", 1);
-    if (!vins.exec()) {
-        m_lastError = vins.lastError().text();
-        return false;
-    }
+    if (!vins.exec())
+        return std::unexpected(vins.lastError().text());
 
-    return true;
+    return {};
 }

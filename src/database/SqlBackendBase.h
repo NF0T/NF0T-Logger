@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <expected>
 #include <QSqlDatabase>
 #include <QString>
 
@@ -16,22 +17,20 @@ public:
     SqlBackendBase();
     ~SqlBackendBase() override;
 
-    void    close()   override;
-    bool    isOpen()  const override;
-    QString lastError() const override;
+    void close()  override;
+    bool isOpen() const override;
 
-    bool insertQso(Qso &qso)           override;
-    bool updateQso(const Qso &qso)     override;
-    bool deleteQso(qint64 id)          override;
-    QList<Qso> fetchQsos(const QsoFilter &filter = {}) override;
-    int        qsoCount()              override;
+    std::expected<qint64, QString> insertQso(Qso &qso)           override;
+    std::expected<void,   QString> updateQso(const Qso &qso)     override;
+    std::expected<void,   QString> deleteQso(qint64 id)          override;
+    std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) override;
+    std::expected<int,        QString> qsoCount()                override;
 
 protected:
     QSqlDatabase m_db;
     QString      m_connectionName;
-    QString      m_lastError;
 
-    bool execQuery(const QString &sql);
+    std::expected<void, QString> execQuery(const QString &sql);
 
 private:
     static void bindQso(QSqlQuery &q, const Qso &qso);

@@ -61,15 +61,15 @@ MigrateResult Log4OmMigrator::migrate(const MigrateOptions &opts)
         const QString destPath = opts.destSqlitePath.isEmpty()
                                      ? QStringLiteral("migrated_log.db")
                                      : opts.destSqlitePath;
-        if (!dest.open({{QStringLiteral("path"), destPath}})) {
+        if (auto r = dest.open({{QStringLiteral("path"), destPath}}); !r) {
             result.errorDetails << QStringLiteral("Cannot open destination database: %1")
-                                       .arg(dest.lastError());
+                                       .arg(r.error());
             ++result.errors;
             QSqlDatabase::removeDatabase(srcConn);
             return result;
         }
-        if (!dest.initSchema()) {
-            result.errorDetails << QStringLiteral("Schema init failed: %1").arg(dest.lastError());
+        if (auto r = dest.initSchema(); !r) {
+            result.errorDetails << QStringLiteral("Schema init failed: %1").arg(r.error());
             ++result.errors;
             QSqlDatabase::removeDatabase(srcConn);
             return result;
@@ -145,10 +145,10 @@ MigrateResult Log4OmMigrator::migrate(const MigrateOptions &opts)
             Qso qso = rowToQso(q);
 
             if (!opts.dryRun) {
-                if (dest.insertQso(qso)) {
+                if (auto r = dest.insertQso(qso); r) {
                     ++result.inserted;
                 } else {
-                    const QString err = dest.lastError();
+                    const QString &err = r.error();
                     if (err.contains(QLatin1String("UNIQUE"), Qt::CaseInsensitive) ||
                         err.contains(QLatin1String("Duplicate"), Qt::CaseInsensitive)) {
                         ++result.skipped;

@@ -7,6 +7,6 @@
 class MariaDbBackend : public SqlBackendBase
 {
 public:
-    bool open(const QVariantMap &config) override;
-    bool initSchema() override;
+    std::expected<void, QString> open(const QVariantMap &config) override;
+    std::expected<void, QString> initSchema() override;
 };

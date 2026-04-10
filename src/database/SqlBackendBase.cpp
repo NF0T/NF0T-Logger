@@ -1,5 +1,6 @@
 #include "SqlBackendBase.h"
 
+#include <expected>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSet>
@@ -264,70 +265,54 @@ bool SqlBackendBase::isOpen() const
     return m_db.isOpen();
 }
 
-QString SqlBackendBase::lastError() const
-{
-    return m_lastError;
-}
-
-bool SqlBackendBase::execQuery(const QString &sql)
+std::expected<void, QString> SqlBackendBase::execQuery(const QString &sql)
 {
     QSqlQuery q(m_db);
-    if (!q.exec(sql)) {
-        m_lastError = q.lastError().text();
-        return false;
-    }
-    return true;
+    if (!q.exec(sql))
+        return std::unexpected(q.lastError().text());
+    return {};
 }
 
 // ---------------------------------------------------------------------------
 // CRUD
 // ---------------------------------------------------------------------------
 
-bool SqlBackendBase::insertQso(Qso &qso)
+std::expected<qint64, QString> SqlBackendBase::insertQso(Qso &qso)
 {
     QSqlQuery q(m_db);
-    if (!q.prepare(INSERT_SQL)) {
-        m_lastError = q.lastError().text();
-        return false;
-    }
+    if (!q.prepare(INSERT_SQL))
+        return std::unexpected(q.lastError().text());
     bindQso(q, qso);
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
-        return false;
-    }
-    qso.id = q.lastInsertId().toLongLong();
-    return true;
+    if (!q.exec())
+        return std::unexpected(q.lastError().text());
+    const qint64 id = q.lastInsertId().toLongLong();
+    qso.id = id;
+    return id;
 }
 
-bool SqlBackendBase::updateQso(const Qso &qso)
+std::expected<void, QString> SqlBackendBase::updateQso(const Qso &qso)
 {
     QSqlQuery q(m_db);
-    if (!q.prepare(UPDATE_SQL)) {
-        m_lastError = q.lastError().text();
-        return false;
-    }
+    if (!q.prepare(UPDATE_SQL))
+        return std::unexpected(q.lastError().text());
     bindQso(q, qso);
     q.bindValue(":id", qso.id);
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
-        return false;
-    }
-    return true;
+    if (!q.exec())
+        return std::unexpected(q.lastError().text());
+    return {};
 }
 
-bool SqlBackendBase::deleteQso(qint64 id)
+std::expected<void, QString> SqlBackendBase::deleteQso(qint64 id)
 {
     QSqlQuery q(m_db);
     q.prepare("DELETE FROM qsos WHERE id = :id");
     q.bindValue(":id", id);
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
-        return false;
-    }
-    return true;
+    if (!q.exec())
+        return std::unexpected(q.lastError().text());
+    return {};
 }
 
-QList<Qso> SqlBackendBase::fetchQsos(const QsoFilter &filter)
+std::expected<QList<Qso>, QString> SqlBackendBase::fetchQsos(const QsoFilter &filter)
 {
     // Whitelist order-by columns to prevent SQL injection
     static const QSet<QString> validCols = {
@@ -381,10 +366,8 @@ QList<Qso> SqlBackendBase::fetchQsos(const QsoFilter &filter)
     for (auto it = binds.cbegin(); it != binds.cend(); ++it)
         q.bindValue(it.key(), it.value());
 
-    if (!q.exec()) {
-        m_lastError = q.lastError().text();
-        return {};
-    }
+    if (!q.exec())
+        return std::unexpected(q.lastError().text());
 
     QList<Qso> results;
     while (q.next())
@@ -392,13 +375,11 @@ QList<Qso> SqlBackendBase::fetchQsos(const QsoFilter &filter)
     return results;
 }
 
-int SqlBackendBase::qsoCount()
+std::expected<int, QString> SqlBackendBase::qsoCount()
 {
     QSqlQuery q(m_db);
-    if (!q.exec("SELECT COUNT(*) FROM qsos") || !q.next()) {
-        m_lastError = q.lastError().text();
-        return -1;
-    }
+    if (!q.exec("SELECT COUNT(*) FROM qsos") || !q.next())
+        return std::unexpected(q.lastError().text());
     return q.value(0).toInt();
 }
 

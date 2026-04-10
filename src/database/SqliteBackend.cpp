@@ -1,42 +1,38 @@
 #include "SqliteBackend.h"
 
+#include <expected>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 
-bool SqliteBackend::open(const QVariantMap &config)
+std::expected<void, QString> SqliteBackend::open(const QVariantMap &config)
 {
     const QString path = config.value("path").toString();
-    if (path.isEmpty()) {
-        m_lastError = "SqliteBackend: 'path' config key is required";
-        return false;
-    }
+    if (path.isEmpty())
+        return std::unexpected(QStringLiteral("SqliteBackend: 'path' config key is required"));
 
     m_db = QSqlDatabase::addDatabase("QSQLITE", m_connectionName);
     m_db.setDatabaseName(path);
 
-    if (!m_db.open()) {
-        m_lastError = m_db.lastError().text();
-        return false;
-    }
+    if (!m_db.open())
+        return std::unexpected(m_db.lastError().text());
 
     // Enable WAL mode and foreign keys for better performance/correctness
     execQuery("PRAGMA journal_mode=WAL");
     execQuery("PRAGMA foreign_keys=ON");
     execQuery("PRAGMA synchronous=NORMAL");
 
-    return true;
+    return {};
 }
 
-bool SqliteBackend::initSchema()
+std::expected<void, QString> SqliteBackend::initSchema()
 {
-    // --- schema_version ---
-    if (!execQuery(R"(
+    if (auto r = execQuery(R"(
         CREATE TABLE IF NOT EXISTS schema_version (
             version     INTEGER NOT NULL,
             applied_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         )
-    )")) return false;
+    )"); !r) return r;
 
     // Determine current version
     QSqlQuery vq(m_db);
@@ -44,10 +40,10 @@ bool SqliteBackend::initSchema()
     const int currentVersion = (vq.next() && !vq.value(0).isNull()) ? vq.value(0).toInt() : 0;
 
     if (currentVersion >= 1)
-        return true;   // Up to date — add future migrations here
+        return {};   // Up to date — add future migrations here
 
     // --- v1: main schema ---
-    const bool ok = execQuery(R"(
+    if (auto r = execQuery(R"(
         CREATE TABLE IF NOT EXISTS qsos (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -160,9 +156,7 @@ bool SqliteBackend::initSchema()
 
             UNIQUE (callsign, datetime_on, band, mode)
         )
-    )");
-
-    if (!ok) return false;
+    )"); !r) return r;
 
     // Indexes
     execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_datetime_on    ON qsos(datetime_on)");
@@ -179,10 +173,8 @@ bool SqliteBackend::initSchema()
     QSqlQuery vins(m_db);
     vins.prepare("INSERT INTO schema_version (version) VALUES (:v)");
     vins.bindValue(":v", 1);
-    if (!vins.exec()) {
-        m_lastError = vins.lastError().text();
-        return false;
-    }
+    if (!vins.exec())
+        return std::unexpected(vins.lastError().text());
 
-    return true;
+    return {};
 }
