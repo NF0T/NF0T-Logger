@@ -25,8 +25,6 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     if (!rect.isValid()) return;
 
     painter->save();
-
-    // Clip base paint to this section so it cannot bleed.
     painter->setClipRect(rect);
     QHeaderView::paintSection(painter, rect, logicalIndex);
 
@@ -37,9 +35,9 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
 
     const int halfH  = rect.height() / 2;
     const int offset = logicalIndex - QsoTableModel::ColQslFirst;
+    const bool isRight = (offset % 2 == 1);
 
-    // Horizontal divider
-    painter->setClipRect(rect);
+    // Horizontal divider between top (group) row and bottom (S/R) row
     painter->setPen(palette().mid().color());
     painter->drawLine(rect.left(), rect.top() + halfH, rect.right(), rect.top() + halfH);
 
@@ -49,28 +47,32 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     painter->setPen(palette().windowText().color());
     painter->drawText(botRect, Qt::AlignCenter, QString::fromLatin1(kSubLabels[offset]));
 
-    // Top half — service group name centered across BOTH sub-columns.
-    // Both the left and right sub-column paint it so that whichever is painted
-    // last (right) leaves the correct final result.
-    static const char *kGroupNames[] = { "LoTW", "eQSL", "QRZ", "ClubLog" };
-    const int groupIdx = offset / 2;
-    const bool isLeft  = (offset % 2 == 0);
+    // Top half — only the RIGHT column of each pair repaints the full merged span.
+    // Because Qt paints left-to-right, the right column runs last and can safely
+    // overdraw the inner vertical divider that the base class drew for the left column.
+    if (isRight && logicalIndex - 1 >= 0) {
+        static const char *kGroupNames[] = { "LoTW", "eQSL", "QRZ", "ClubLog" };
 
-    const int leftW  = isLeft  ? rect.width()
-                                : (logicalIndex - 1 >= 0 ? sectionSize(logicalIndex - 1) : 0);
-    const int rightW = isLeft  ? (logicalIndex + 1 < count() ? sectionSize(logicalIndex + 1) : 0)
-                                : rect.width();
-    const int spanX  = isLeft  ? rect.x() : rect.x() - leftW;
-    const QRect groupRect(spanX, rect.top(), leftW + rightW, halfH);
+        const int leftW   = sectionSize(logicalIndex - 1);
+        const QRect span(rect.x() - leftW, rect.top(), leftW + rect.width(), halfH);
 
-    // Disable clipping so the text can draw freely across both columns.
-    painter->setClipping(false);
-    QFont f = painter->font();
-    f.setBold(true);
-    painter->setFont(f);
-    painter->setPen(palette().windowText().color());
-    painter->drawText(groupRect, Qt::AlignCenter,
-                      QString::fromLatin1(kGroupNames[groupIdx]));
+        painter->setClipping(false);
+
+        // Flood-fill both cells' top halves to erase the inner divider
+        painter->fillRect(span, palette().button());
+
+        // Redraw outer border of the merged cell
+        painter->setPen(palette().mid().color());
+        painter->drawRect(span.adjusted(0, 0, -1, -1));
+
+        // Group name centred across the full span
+        QFont f = painter->font();
+        f.setBold(true);
+        painter->setFont(f);
+        painter->setPen(palette().windowText().color());
+        painter->drawText(span, Qt::AlignCenter,
+                          QString::fromLatin1(kGroupNames[offset / 2]));
+    }
 
     painter->restore();
 }
