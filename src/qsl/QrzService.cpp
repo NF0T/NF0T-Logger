@@ -6,6 +6,8 @@
 #include <QNetworkRequest>
 #include <QUrlQuery>
 
+#include <QDebug>
+
 #include "app/settings/SecureSettings.h"
 #include "app/settings/Settings.h"
 #include "core/adif/AdifParser.h"
@@ -125,6 +127,11 @@ void QrzService::startDownload()
 
     const QByteArray body = buildBody(apiKey, QStringLiteral("FETCH"), option);
 
+    // Debug: log the request (key redacted)
+    const QByteArray debugBody = buildBody(QStringLiteral("***REDACTED***"),
+                                           QStringLiteral("FETCH"), option);
+    qDebug() << "QRZ FETCH request body:" << debugBody;
+
     QNetworkRequest req(API_URL);
     req.setHeader(QNetworkRequest::ContentTypeHeader,
                   QStringLiteral("application/x-www-form-urlencoded"));
@@ -149,17 +156,24 @@ void QrzService::onDownloadReply()
     const QString body = QString::fromUtf8(m_reply->readAll());
     m_reply = nullptr;
 
+    qDebug() << "QRZ FETCH raw response:" << body;
+
     // Response is URL-encoded; DATA key contains the ADIF
     QUrlQuery response(body);
-    const QString result = response.queryItemValue(QStringLiteral("RESULT"));
+    const QString result  = response.queryItemValue(QStringLiteral("RESULT"));
+    const QString reason  = response.queryItemValue(QStringLiteral("REASON"));
+    const QString count   = response.queryItemValue(QStringLiteral("COUNT"));
+
+    qDebug() << "QRZ FETCH parsed — RESULT:" << result << "REASON:" << reason << "COUNT:" << count;
 
     if (result.compare(QLatin1String("OK"), Qt::CaseInsensitive) != 0) {
-        const QString reason = response.queryItemValue(QStringLiteral("REASON"));
         // "No records" is not an error
-        if (reason.contains(QLatin1String("No records"), Qt::CaseInsensitive)) {
-            emit downloadFinished({}, {});
+        if (reason.contains(QLatin1String("No records"), Qt::CaseInsensitive) ||
+            (result.compare(QLatin1String("FAIL"), Qt::CaseInsensitive) == 0 && count == QLatin1String("0"))) {
+            emit downloadFinished({}, {tr("QRZ: no new confirmations found.")});
         } else {
-            emit downloadFinished({}, {tr("QRZ fetch error: %1").arg(reason.isEmpty() ? body : reason)});
+            emit downloadFinished({}, {tr("QRZ fetch error: %1\nRaw response: %2")
+                                           .arg(reason.isEmpty() ? result : reason, body)});
         }
         return;
     }
