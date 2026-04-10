@@ -354,6 +354,11 @@ std::expected<QList<Qso>, QString> SqlBackendBase::fetchQsos(const QsoFilter &fi
     if (filter.clublogPending && *filter.clublogPending)
         where << "clublog_qsl_sent != 'Y'";
 
+    if (filter.lotwUnsent    && *filter.lotwUnsent)    where << "lotw_qsl_sent    != 'Y'";
+    if (filter.eqslUnsent    && *filter.eqslUnsent)    where << "eqsl_qsl_sent    != 'Y'";
+    if (filter.qrzUnsent     && *filter.qrzUnsent)     where << "qrz_qsl_sent     != 'Y'";
+    if (filter.clublogUnsent && *filter.clublogUnsent) where << "clublog_qsl_sent != 'Y'";
+
     QString sql = "SELECT * FROM qsos";
     if (!where.isEmpty())
         sql += " WHERE " + where.join(" AND ");

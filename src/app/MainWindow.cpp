@@ -539,9 +539,8 @@ void MainWindow::onQslUpload()
     const QList<QslService*> services = {
         m_lotwService, m_eqslService, m_qrzService, m_clublogService
     };
-    const QList<Qso> allQsos = m_db->fetchQsos().value_or(QList<Qso>{});
 
-    QslUploadDialog dlg(services, allQsos, this);
+    QslUploadDialog dlg(services, m_db.get(), this);
     connect(&dlg, &QslUploadDialog::uploadCompleted, this,
             [this](const QList<Qso> &updated, const QStringList &) {
         applyUploadedQsos(updated, {});

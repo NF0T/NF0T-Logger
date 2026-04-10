@@ -11,27 +11,31 @@ class QComboBox;
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
+class QTableWidget;
 class QslService;
+class DatabaseInterface;
 
-/// Non-modal dialog for uploading QSOs to a selected QSL service.
+/// Dialog for uploading QSOs to a selected QSL service.
 ///
-/// The user picks a service and clicks Upload. The service filters internally
-/// to only unsent QSOs. Progress and server responses appear in the log area.
+/// Workflow:
+///   1. User selects a service from the combo.
+///   2. "Select Required" queries the DB for unsent QSOs for that service
+///      and populates the table with all rows pre-selected.
+///   3. User optionally deselects individual rows.
+///   4. "Upload to <Service>" sends only the checked rows.
+///   5. Live log shows per-QSO and server progress.
 ///
-/// On completion, uploadCompleted() is emitted so the caller can persist the
-/// updated QSOs (with sent flag + date set) to the database.
+/// On completion, uploadCompleted() is emitted so MainWindow can update the DB.
 class QslUploadDialog : public QDialog
 {
     Q_OBJECT
 
 public:
     QslUploadDialog(const QList<QslService*> &services,
-                    const QList<Qso>         &allQsos,
+                    DatabaseInterface        *db,
                     QWidget                  *parent = nullptr);
 
 signals:
-    /// Emitted when an upload operation finishes. updated QSOs have the
-    /// sent flag and date already set by the service.
     void uploadCompleted(const QList<Qso> &updated, const QStringList &errors);
 
 protected:
@@ -39,6 +43,7 @@ protected:
 
 private slots:
     void onServiceChanged(int index);
+    void onSelectRequired();
     void onUploadClicked();
     void onUploadFinished(const QList<Qso> &updated, const QStringList &errors);
 
@@ -46,17 +51,20 @@ private:
     void appendLog(const QString &msg);
     void setRunning(bool running);
     void disconnectService();
+    void updateUploadButton();
 
     QList<QslService*>             m_services;
-    QList<Qso>                     m_allQsos;
+    DatabaseInterface             *m_db             = nullptr;
     QslService                    *m_currentService = nullptr;
-    bool                           m_running        = false;
+    QList<Qso>                     m_tableQsos;   // QSOs currently shown in table
+    bool                           m_running       = false;
     QList<QMetaObject::Connection> m_serviceConns;
 
-    QComboBox      *m_serviceCombo = nullptr;
-    QLabel         *m_pendingLabel = nullptr;
-    QPlainTextEdit *m_log          = nullptr;
-    QLabel         *m_statusLabel  = nullptr;
-    QPushButton    *m_uploadBtn    = nullptr;
-    QPushButton    *m_closeBtn     = nullptr;
+    QComboBox      *m_serviceCombo   = nullptr;
+    QPushButton    *m_selectBtn      = nullptr;
+    QTableWidget   *m_table          = nullptr;
+    QPushButton    *m_uploadBtn      = nullptr;
+    QPlainTextEdit *m_log            = nullptr;
+    QLabel         *m_statusLabel    = nullptr;
+    QPushButton    *m_closeBtn       = nullptr;
 };
