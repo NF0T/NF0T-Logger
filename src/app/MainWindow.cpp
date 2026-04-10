@@ -38,6 +38,8 @@
 #include "ui/entrypanel/QsoEntryPanel.h"
 #include "ui/QsoEditDialog.h"
 #include "ui/QslColumns.h"
+#include "ui/QslDownloadDialog.h"
+#include "ui/QslUploadDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -130,31 +132,11 @@ MainWindow::MainWindow(QWidget *parent)
     if (Settings::instance().tciEnabled())
         m_tciBackend->connectTci();
 
-    // QSL services
+    // QSL services — owned here; dialogs borrow pointers at open time
     m_lotwService    = new LoTwService(this);
     m_eqslService    = new EqslService(this);
     m_qrzService     = new QrzService(this);
     m_clublogService = new ClubLogService(this);
-
-    auto wireService = [this](QslService *svc) {
-        connect(svc, &QslService::uploadFinished, this,
-                [this, svc](const QList<Qso> &updated, const QStringList &errors) {
-            qslUploadFinished(svc->displayName(), updated, errors);
-        });
-        connect(svc, &QslService::downloadFinished, this,
-                [this, svc](const QList<Qso> &confirmed, const QStringList &errors) {
-            qslDownloadFinished(svc->displayName(), confirmed, errors);
-        });
-        connect(svc, &QslService::uploadProgress, this, [this](int done, int total) {
-            if (total > 0)
-                statusBar()->showMessage(tr("Uploading… %1/%2").arg(done).arg(total));
-        });
-    };
-
-    wireService(m_lotwService);
-    wireService(m_eqslService);
-    wireService(m_qrzService);
-    wireService(m_clublogService);
 }
 
 MainWindow::~MainWindow() = default;
@@ -240,32 +222,16 @@ void MainWindow::setupMenuBar()
     // --- QSL ---
     QMenu *qslMenu = menuBar()->addMenu(tr("&QSL"));
 
-    auto *lotwUpload   = new QAction(tr("Upload to &LoTW..."),        this);
-    auto *lotwDownload = new QAction(tr("Download from &LoTW..."),     this);
-    auto *eqslUpload   = new QAction(tr("Upload to &eQSL..."),         this);
-    auto *eqslDownload = new QAction(tr("Download from e&QSL..."),     this);
-    auto *qrzUpload    = new QAction(tr("Upload to &QRZ..."),          this);
-    auto *qrzDownload  = new QAction(tr("Download from Q&RZ..."),      this);
-    auto *clubUpload   = new QAction(tr("Upload to &ClubLog..."),      this);
+    auto *qslDownloadAction = new QAction(tr("&Download QSL..."), this);
+    qslDownloadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+D")));
+    connect(qslDownloadAction, &QAction::triggered, this, &MainWindow::onQslDownload);
 
-    connect(lotwUpload,   &QAction::triggered, this, &MainWindow::onLotwUpload);
-    connect(lotwDownload, &QAction::triggered, this, &MainWindow::onLotwDownload);
-    connect(eqslUpload,   &QAction::triggered, this, &MainWindow::onEqslUpload);
-    connect(eqslDownload, &QAction::triggered, this, &MainWindow::onEqslDownload);
-    connect(qrzUpload,    &QAction::triggered, this, &MainWindow::onQrzUpload);
-    connect(qrzDownload,  &QAction::triggered, this, &MainWindow::onQrzDownload);
-    connect(clubUpload,   &QAction::triggered, this, &MainWindow::onClubLogUpload);
+    auto *qslUploadAction = new QAction(tr("&Upload QSL..."), this);
+    qslUploadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+U")));
+    connect(qslUploadAction, &QAction::triggered, this, &MainWindow::onQslUpload);
 
-    qslMenu->addAction(lotwUpload);
-    qslMenu->addAction(lotwDownload);
-    qslMenu->addSeparator();
-    qslMenu->addAction(eqslUpload);
-    qslMenu->addAction(eqslDownload);
-    qslMenu->addSeparator();
-    qslMenu->addAction(qrzUpload);
-    qslMenu->addAction(qrzDownload);
-    qslMenu->addSeparator();
-    qslMenu->addAction(clubUpload);
+    qslMenu->addAction(qslDownloadAction);
+    qslMenu->addAction(qslUploadAction);
 
     // --- Help ---
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
@@ -549,150 +515,79 @@ void MainWindow::onDisconnectRadio()
 // QSL slots
 // ---------------------------------------------------------------------------
 
-void MainWindow::onLotwUpload()
+void MainWindow::onQslDownload()
 {
     if (!m_db) return;
-    if (!m_lotwService->isEnabled()) {
-        QMessageBox::information(this, tr("LoTW"),
-            tr("LoTW is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    m_lotwService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
+
+    const QList<QslService*> services = {
+        m_lotwService, m_eqslService, m_qrzService, m_clublogService
+    };
+
+    QslDownloadDialog dlg(services, this);
+    connect(&dlg, &QslDownloadDialog::downloadCompleted, this,
+            [this](const QList<Qso> &confirmed, const QStringList &errors) {
+        applyDownloadedConfirmations(confirmed, errors);
+    });
+    dlg.exec();
 }
 
-void MainWindow::onLotwDownload()
-{
-    if (!m_lotwService->isEnabled()) {
-        QMessageBox::information(this, tr("LoTW"),
-            tr("LoTW is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    statusBar()->showMessage(tr("Downloading LoTW confirmations…"));
-    m_lotwService->startDownload();
-}
-
-void MainWindow::onEqslUpload()
+void MainWindow::onQslUpload()
 {
     if (!m_db) return;
-    if (!m_eqslService->isEnabled()) {
-        QMessageBox::information(this, tr("eQSL"),
-            tr("eQSL is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    m_eqslService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
+
+    const QList<QslService*> services = {
+        m_lotwService, m_eqslService, m_qrzService, m_clublogService
+    };
+    const QList<Qso> allQsos = m_db->fetchQsos().value_or(QList<Qso>{});
+
+    QslUploadDialog dlg(services, allQsos, this);
+    connect(&dlg, &QslUploadDialog::uploadCompleted, this,
+            [this](const QList<Qso> &updated, const QStringList &) {
+        applyUploadedQsos(updated, {});
+    });
+    dlg.exec();
 }
 
-void MainWindow::onEqslDownload()
+void MainWindow::applyUploadedQsos(const QList<Qso> &updated, const QStringList &/*errors*/)
 {
-    if (!m_eqslService->isEnabled()) {
-        QMessageBox::information(this, tr("eQSL"),
-            tr("eQSL is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    statusBar()->showMessage(tr("Downloading eQSL confirmations…"));
-    m_eqslService->startDownload();
+    if (updated.isEmpty() || !m_db) return;
+    for (const Qso &q : updated)
+        std::ignore = m_db->updateQso(q);
+    reloadLog();
+    statusBar()->showMessage(tr("QSL upload: %1 QSO(s) marked sent.").arg(updated.size()), 4000);
 }
 
-void MainWindow::onQrzUpload()
+void MainWindow::applyDownloadedConfirmations(const QList<Qso> &confirmed,
+                                               const QStringList &/*errors*/)
 {
-    if (!m_db) return;
-    if (!m_qrzService->isEnabled()) {
-        QMessageBox::information(this, tr("QRZ"),
-            tr("QRZ is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    m_qrzService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
-}
+    if (confirmed.isEmpty() || !m_db) return;
 
-void MainWindow::onQrzDownload()
-{
-    if (!m_qrzService->isEnabled()) {
-        QMessageBox::information(this, tr("QRZ"),
-            tr("QRZ is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    statusBar()->showMessage(tr("Downloading QRZ confirmations…"));
-    m_qrzService->startDownload();
-}
+    const QList<Qso> local = m_db->fetchQsos().value_or(QList<Qso>{});
+    int matched = 0;
 
-void MainWindow::onClubLogUpload()
-{
-    if (!m_db) return;
-    if (!m_clublogService->isEnabled()) {
-        QMessageBox::information(this, tr("ClubLog"),
-            tr("ClubLog is not enabled. Enable it in Settings → QSL Services."));
-        return;
-    }
-    m_clublogService->startUpload(m_db->fetchQsos().value_or(QList<Qso>{}));
-}
+    for (const Qso &conf : confirmed) {
+        const QDate confDate = conf.datetimeOn.toUTC().date();
+        for (Qso match : local) {
+            if (match.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
+            if (match.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
+            if (match.mode.compare(conf.mode, Qt::CaseInsensitive) != 0) continue;
+            if (match.datetimeOn.toUTC().date() != confDate) continue;
 
-void MainWindow::qslUploadFinished(const QString &serviceName,
-                                     const QList<Qso> &updatedQsos,
-                                     const QStringList &errors)
-{
-    if (!updatedQsos.isEmpty()) {
-        for (const Qso &q : updatedQsos)
-            std::ignore = m_db->updateQso(q);
-        reloadLog();
-    }
+            // Copy confirmed rcvd fields — each service sets only what it knows
+            if (conf.lotwQslRcvd == 'Y') { match.lotwQslRcvd = 'Y'; match.lotwRcvdDate = conf.lotwRcvdDate; }
+            if (conf.eqslQslRcvd == 'Y') { match.eqslQslRcvd = 'Y'; match.eqslRcvdDate = conf.eqslRcvdDate; }
+            if (conf.qrzQslRcvd  == 'Y') { match.qrzQslRcvd  = 'Y'; match.qrzRcvdDate  = conf.qrzRcvdDate; }
 
-    QString msg = tr("%1 upload: %2 contact(s) sent.")
-                      .arg(serviceName).arg(updatedQsos.size());
-    if (!errors.isEmpty())
-        msg += QLatin1Char('\n') + errors.join(QLatin1Char('\n'));
-
-    if (errors.isEmpty() || !updatedQsos.isEmpty()) {
-        QMessageBox::information(this, tr("%1 Upload").arg(serviceName), msg);
-    } else {
-        QMessageBox::warning(this, tr("%1 Upload").arg(serviceName), msg);
-    }
-}
-
-void MainWindow::qslDownloadFinished(const QString &serviceName,
-                                       const QList<Qso> &confirmed,
-                                       const QStringList &errors)
-{
-    int updated = 0;
-
-    if (!confirmed.isEmpty() && m_db) {
-        const QList<Qso> local = m_db->fetchQsos().value_or(QList<Qso>{});
-
-        for (const Qso &conf : confirmed) {
-            // Match on callsign + date + band + mode
-            const QDate confDate = conf.datetimeOn.toUTC().date();
-            for (Qso match : local) {
-                if (match.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
-                if (match.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
-                if (match.mode.compare(conf.mode, Qt::CaseInsensitive) != 0) continue;
-                if (match.datetimeOn.toUTC().date() != confDate) continue;
-
-                // Copy confirmed rcvd fields — service sets whatever is relevant
-                if (conf.lotwQslRcvd == 'Y') { match.lotwQslRcvd = 'Y'; match.lotwRcvdDate = conf.lotwRcvdDate; }
-                if (conf.eqslQslRcvd == 'Y') { match.eqslQslRcvd = 'Y'; match.eqslRcvdDate = conf.eqslRcvdDate; }
-                if (conf.qrzQslRcvd  == 'Y') { match.qrzQslRcvd  = 'Y'; match.qrzRcvdDate  = conf.qrzRcvdDate; }
-
-                std::ignore = m_db->updateQso(match);
-                ++updated;
-                break;
-            }
+            std::ignore = m_db->updateQso(match);
+            ++matched;
+            break;
         }
-
-        if (updated > 0)
-            reloadLog();
     }
 
-    QString msg = tr("%1 download: %2 confirmation(s) matched.")
-                      .arg(serviceName).arg(updated);
-    if (!errors.isEmpty())
-        msg += QLatin1Char('\n') + errors.join(QLatin1Char('\n'));
-
-    if (errors.isEmpty() || updated > 0) {
-        QMessageBox::information(this, tr("%1 Download").arg(serviceName), msg);
-    } else {
-        QMessageBox::warning(this, tr("%1 Download").arg(serviceName), msg);
+    if (matched > 0) {
+        reloadLog();
+        statusBar()->showMessage(tr("QSL download: %1 QSO(s) updated.").arg(matched), 4000);
     }
-
-    statusBar()->clearMessage();
 }
 
 void MainWindow::onQsoReady(const Qso &qso)

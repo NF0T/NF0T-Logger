@@ -46,22 +46,14 @@ private slots:
     void onConnectTci();
     void onDisconnectRadio();
     // QSL
-    void onLotwUpload();
-    void onLotwDownload();
-    void onEqslUpload();
-    void onEqslDownload();
-    void onQrzUpload();
-    void onQrzDownload();
-    void onClubLogUpload();
+    void onQslDownload();
+    void onQslUpload();
 
 private:
-    // QSL helpers — called from lambdas, not registered with MOC
-    void qslUploadFinished  (const QString &serviceName,
-                             const QList<Qso> &updatedQsos,
-                             const QStringList &errors);
-    void qslDownloadFinished(const QString &serviceName,
-                             const QList<Qso> &confirmed,
-                             const QStringList &errors);
+    // QSL helpers — apply confirmed/updated QSOs to the database
+    void applyDownloadedConfirmations(const QList<Qso> &confirmed, const QStringList &errors);
+    void applyUploadedQsos           (const QList<Qso> &updated,   const QStringList &errors);
+
     void setupMenuBar();
     void setupToolBar();
     void setupCentralWidget();

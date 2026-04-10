@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QDate>
 #include <QList>
 #include <QObject>
 #include <QString>
@@ -14,13 +15,18 @@
 /// Upload:
 ///   - Caller passes ALL local QSOs; each service filters to unsent ones.
 ///   - On completion, uploadFinished() carries the updated Qso objects
-///     (with sent flag + date set) so MainWindow can call DB::updateQso.
+///     (with sent flag + date set) so the caller can update the DB.
 ///
 /// Download (LoTW, eQSL, QRZ):
-///   - Service fetches confirmations from the remote service.
+///   - Caller supplies a date range [from, to].
+///   - Service fetches confirmations from the remote service in that range.
 ///   - downloadFinished() carries partial Qso stubs with enough fields to
 ///     match against local records (callsign, date, band, mode) and the
-///     rcvd flag + date filled in. MainWindow does the matching and DB update.
+///     rcvd flag + date filled in.
+///
+/// Progress / logging:
+///   - logMessage() is emitted at key points during both upload and download.
+///     Connect it to a log view for real-time status.
 ///
 /// ClubLog does not support download; canDownload() returns false.
 class QslService : public QObject
@@ -38,13 +44,17 @@ public:
     /// Start uploading. Filters internally to unsent QSOs.
     virtual void startUpload(const QList<Qso> &allQsos) = 0;
 
-    /// Start downloading confirmations. No-op if canDownload() is false.
-    virtual void startDownload() = 0;
+    /// Start downloading confirmations in [from, to].
+    /// No-op if canDownload() is false.
+    virtual void startDownload(const QDate &from, const QDate &to) = 0;
 
     /// Cancel any in-progress operation.
     virtual void abort() = 0;
 
 signals:
+    /// Emitted at key points during upload or download for UI log views.
+    void logMessage(const QString &message);
+
     /// Emitted periodically during upload (done=0, total=0 = indeterminate).
     void uploadProgress(int done, int total);
 
@@ -54,7 +64,6 @@ signals:
     void uploadFinished(const QList<Qso> &updatedQsos, const QStringList &errors);
 
     /// Download complete. confirmed are stubs with callsign/datetimeOn/band/mode
-    /// plus the rcvd flag and rcvd date filled in. MainWindow matches these
-    /// against the local log and calls DB::updateQso.
+    /// plus the rcvd flag and rcvd date filled in.
     void downloadFinished(const QList<Qso> &confirmed, const QStringList &errors);
 };

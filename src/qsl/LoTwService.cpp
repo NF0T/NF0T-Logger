@@ -47,15 +47,20 @@ void LoTwService::startUpload(const QList<Qso> &allQsos)
     }
 
     if (m_pendingUpload.isEmpty()) {
+        emit logMessage(tr("No unsent QSOs for LoTW."));
         emit uploadFinished({}, {tr("No unsent QSOs for LoTW.")});
         return;
     }
+
+    emit logMessage(tr("Preparing %1 QSO(s) for LoTW upload...").arg(m_pendingUpload.size()));
 
     // Write temp ADIF
     m_tempFile = new QTemporaryFile(QStringLiteral("nf0t_lotw_XXXXXX.adi"), this);
     m_tempFile->setAutoRemove(true);
     if (!m_tempFile->open()) {
-        emit uploadFinished({}, {tr("Could not create temporary ADIF file for TQSL.")});
+        const QString err = tr("Could not create temporary ADIF file for TQSL.");
+        emit logMessage(err);
+        emit uploadFinished({}, {err});
         m_pendingUpload.clear();
         return;
     }
@@ -67,12 +72,14 @@ void LoTwService::startUpload(const QList<Qso> &allQsos)
     m_tempFile->close();
 
     // Build TQSL command
-    const QString tqslPath       = Settings::instance().lotwTqslPath();
+    const QString tqslPath        = Settings::instance().lotwTqslPath();
     const QString stationLocation = Settings::instance().lotwStationLocation();
 
     if (stationLocation.isEmpty()) {
-        emit uploadFinished({}, {tr("LoTW station location not set. "
-                                    "Enter the exact name from TQSL → Station Locations in Settings → QSL Services → LoTW.")});
+        const QString err = tr("LoTW station location not set. "
+                               "Enter the exact name from TQSL → Station Locations in Settings → QSL Services → LoTW.");
+        emit logMessage(err);
+        emit uploadFinished({}, {err});
         m_pendingUpload.clear();
         return;
     }
@@ -84,18 +91,41 @@ void LoTwService::startUpload(const QList<Qso> &allQsos)
          << QStringLiteral("-l") << stationLocation
          << tempPath;
 
+    const QString exe = tqslPath.isEmpty() ? QStringLiteral("tqsl") : tqslPath;
+    emit logMessage(tr("Starting TQSL: %1 %2").arg(exe, args.join(QLatin1Char(' '))));
+
     m_tqsl = new QProcess(this);
+    connect(m_tqsl, &QProcess::readyReadStandardOutput, this, &LoTwService::onTqslOutput);
+    connect(m_tqsl, &QProcess::readyReadStandardError,  this, &LoTwService::onTqslError);
     connect(m_tqsl, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &LoTwService::onTqslFinished);
 
     emit uploadProgress(0, 0);   // indeterminate
-    m_tqsl->start(tqslPath.isEmpty() ? QStringLiteral("tqsl") : tqslPath, args);
+    m_tqsl->start(exe, args);
+}
+
+void LoTwService::onTqslOutput()
+{
+    const QString text = QString::fromLocal8Bit(m_tqsl->readAllStandardOutput()).trimmed();
+    if (!text.isEmpty())
+        emit logMessage(text);
+}
+
+void LoTwService::onTqslError()
+{
+    const QString text = QString::fromLocal8Bit(m_tqsl->readAllStandardError()).trimmed();
+    if (!text.isEmpty())
+        emit logMessage(text);
 }
 
 void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
 {
-    const QString stdOut = QString::fromLocal8Bit(m_tqsl->readAllStandardOutput()).trimmed();
-    const QString stdErr = QString::fromLocal8Bit(m_tqsl->readAllStandardError()).trimmed();
+    // Drain any remaining output not yet read via readyRead
+    const QString remainOut = QString::fromLocal8Bit(m_tqsl->readAllStandardOutput()).trimmed();
+    const QString remainErr = QString::fromLocal8Bit(m_tqsl->readAllStandardError()).trimmed();
+    if (!remainOut.isEmpty()) emit logMessage(remainOut);
+    if (!remainErr.isEmpty()) emit logMessage(remainErr);
+
     m_tqsl->deleteLater();
     m_tqsl = nullptr;
 
@@ -104,16 +134,10 @@ void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
         m_tempFile = nullptr;
     }
 
-    // Collect all tqsl output for the result message
-    QStringList tqslOutput;
-    if (!stdOut.isEmpty()) tqslOutput << stdOut;
-    if (!stdErr.isEmpty()) tqslOutput << stdErr;
+    emit logMessage(tr("TQSL exited with code %1.").arg(exitCode));
 
     if (exitCode != 0) {
-        QStringList errors;
-        errors << tr("TQSL exited with code %1.").arg(exitCode);
-        errors << tqslOutput;
-        emit uploadFinished({}, errors);
+        emit uploadFinished({}, {tr("TQSL exited with code %1.").arg(exitCode)});
         m_pendingUpload.clear();
         return;
     }
@@ -125,7 +149,8 @@ void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
         q.lotwSentDate = today;
     }
 
-    emit uploadFinished(m_pendingUpload, tqslOutput);
+    emit logMessage(tr("Successfully uploaded %1 QSO(s) to LoTW.").arg(m_pendingUpload.size()));
+    emit uploadFinished(m_pendingUpload, {});
     m_pendingUpload.clear();
 }
 
@@ -133,27 +158,31 @@ void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
 // Download from ARRL LoTW
 // ---------------------------------------------------------------------------
 
-void LoTwService::startDownload()
+void LoTwService::startDownload(const QDate &from, const QDate &to)
 {
+    Q_UNUSED(to)   // LoTW API has no end-date parameter; returns all since 'from'
+
     const Settings &s  = Settings::instance();
     const QString user = s.lotwCallsign().isEmpty() ? s.stationCallsign() : s.lotwCallsign();
     const QString pass = SecureSettings::instance().get(SecureKey::LOTW_PASSWORD);
 
     if (user.isEmpty() || pass.isEmpty()) {
-        emit downloadFinished({}, {tr("LoTW credentials not configured.")});
+        const QString err = tr("LoTW credentials not configured.");
+        emit logMessage(err);
+        emit downloadFinished({}, {err});
         return;
     }
 
-    // Fetch confirmations from the last 90 days
-    const QString since = QDate::currentDate().addDays(-90).toString(Qt::ISODate);
+    const QString since = from.toString(Qt::ISODate);
+    emit logMessage(tr("Requesting LoTW confirmations for %1 since %2...").arg(user, since));
 
     QUrlQuery q;
-    q.addQueryItem(QStringLiteral("login"),          user);
-    q.addQueryItem(QStringLiteral("password"),        pass);
-    q.addQueryItem(QStringLiteral("qso_query"),       QStringLiteral("1"));
-    q.addQueryItem(QStringLiteral("qso_owncall"),     s.stationCallsign());
-    q.addQueryItem(QStringLiteral("qso_qslsince"),    since);
-    q.addQueryItem(QStringLiteral("qso_qsldetail"),   QStringLiteral("yes"));
+    q.addQueryItem(QStringLiteral("login"),        user);
+    q.addQueryItem(QStringLiteral("password"),     pass);
+    q.addQueryItem(QStringLiteral("qso_query"),    QStringLiteral("1"));
+    q.addQueryItem(QStringLiteral("qso_owncall"),  s.stationCallsign());
+    q.addQueryItem(QStringLiteral("qso_qslsince"), since);
+    q.addQueryItem(QStringLiteral("qso_qsldetail"),QStringLiteral("yes"));
 
     QUrl url(QStringLiteral("https://lotw.arrl.org/lotwuser/lotwreport.adi"));
     url.setQuery(q);
@@ -169,10 +198,10 @@ void LoTwService::onDownloadReply()
 {
     m_reply->deleteLater();
 
-    QStringList errors;
     if (m_reply->error() != QNetworkReply::NoError) {
-        errors << tr("LoTW download error: %1").arg(m_reply->errorString());
-        emit downloadFinished({}, errors);
+        const QString err = tr("LoTW download error: %1").arg(m_reply->errorString());
+        emit logMessage(err);
+        emit downloadFinished({}, {err});
         m_reply = nullptr;
         return;
     }
@@ -180,19 +209,21 @@ void LoTwService::onDownloadReply()
     const QString body = QString::fromUtf8(m_reply->readAll());
     m_reply = nullptr;
 
+    emit logMessage(tr("Received %1 byte(s) from LoTW.").arg(body.size()));
+
     // Check for LoTW login error (returns HTML or "Login failed")
     if (body.contains(QLatin1String("Login Failed"), Qt::CaseInsensitive) ||
         body.contains(QLatin1String("<html"), Qt::CaseInsensitive)) {
-        emit downloadFinished({}, {tr("LoTW login failed. Check credentials.")});
+        const QString err = tr("LoTW login failed. Check credentials.");
+        emit logMessage(err);
+        emit downloadFinished({}, {err});
         return;
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(body);
-    errors = parsed.warnings;
+    emit logMessage(tr("Parsed %1 confirmation(s) from LoTW.").arg(parsed.qsos.size()));
 
-    // Each parsed QSO stub has callsign / datetimeOn / band / mode
-    // and lotwQslRcvd/lotwQslRcvdDate filled in from ADIF LOTW_QSLRDATE field
-    emit downloadFinished(parsed.qsos, errors);
+    emit downloadFinished(parsed.qsos, parsed.warnings);
 }
 
 // ---------------------------------------------------------------------------

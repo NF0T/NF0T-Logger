@@ -7,11 +7,10 @@ class QNetworkReply;
 class QProcess;
 class QTemporaryFile;
 
-/// LoTW QSL service.
+/// ARRL Logbook of the World QSL service.
 ///
-/// Upload:  writes a temp ADIF and calls TQSL via QProcess.
-/// Download: HTTP GET to the ARRL LoTW report endpoint, then parses the
-///           returned ADIF for received confirmations.
+/// Upload:   Signs and uploads via the TQSL command-line tool.
+/// Download: HTTP GET to lotw.arrl.org; parses returned ADIF.
 class LoTwService : public QslService
 {
     Q_OBJECT
@@ -23,11 +22,13 @@ public:
     QString displayName() const override { return QStringLiteral("LoTW"); }
     bool    isEnabled()   const override;
 
-    void startUpload  (const QList<Qso> &allQsos) override;
-    void startDownload()                           override;
-    void abort()                                   override;
+    void startUpload  (const QList<Qso> &allQsos)          override;
+    void startDownload(const QDate &from, const QDate &to) override;
+    void abort()                                            override;
 
 private slots:
+    void onTqslOutput();
+    void onTqslError();
     void onTqslFinished(int exitCode, int exitStatus);
     void onDownloadReply();
 
@@ -37,5 +38,5 @@ private:
     QProcess              *m_tqsl     = nullptr;
     QTemporaryFile        *m_tempFile = nullptr;
 
-    QList<Qso> m_pendingUpload;   // QSOs being uploaded (to emit back on success)
+    QList<Qso> m_pendingUpload;
 };

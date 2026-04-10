@@ -41,6 +41,7 @@ void ClubLogService::startUpload(const QList<Qso> &allQsos)
     }
 
     if (m_pendingUpload.isEmpty()) {
+        emit logMessage(tr("No unsent QSOs for ClubLog."));
         emit uploadFinished({}, {tr("No unsent QSOs for ClubLog.")});
         return;
     }
@@ -52,10 +53,14 @@ void ClubLogService::startUpload(const QList<Qso> &allQsos)
     const QString   appKey = SecureSettings::instance().get(SecureKey::CLUBLOG_APP_KEY);
 
     if (email.isEmpty() || pass.isEmpty() || appKey.isEmpty()) {
-        emit uploadFinished({}, {tr("ClubLog credentials not configured.")});
+        const QString err = tr("ClubLog credentials not configured.");
+        emit logMessage(err);
+        emit uploadFinished({}, {err});
         m_pendingUpload.clear();
         return;
     }
+
+    emit logMessage(tr("Uploading %1 QSO(s) to ClubLog as %2...").arg(m_pendingUpload.size()).arg(cs));
 
     AdifWriterOptions opts;
     opts.includeAppFields = false;
@@ -101,8 +106,9 @@ void ClubLogService::onUploadReply()
 
     QStringList errors;
     if (m_reply->error() != QNetworkReply::NoError) {
-        errors << tr("ClubLog upload error: %1").arg(m_reply->errorString());
-        emit uploadFinished({}, errors);
+        const QString err = tr("ClubLog upload error: %1").arg(m_reply->errorString());
+        emit logMessage(err);
+        emit uploadFinished({}, {err});
         m_reply = nullptr;
         m_pendingUpload.clear();
         return;
@@ -111,9 +117,13 @@ void ClubLogService::onUploadReply()
     const QString body = QString::fromUtf8(m_reply->readAll()).trimmed();
     m_reply = nullptr;
 
+    emit logMessage(tr("ClubLog response: %1").arg(body.left(200)));
+
     // ClubLog returns "OK" on success or an error message
     if (!body.startsWith(QLatin1String("OK"), Qt::CaseInsensitive)) {
-        emit uploadFinished({}, {tr("ClubLog error: %1").arg(body)});
+        const QString err = tr("ClubLog error: %1").arg(body);
+        emit logMessage(err);
+        emit uploadFinished({}, {err});
         m_pendingUpload.clear();
         return;
     }
@@ -124,6 +134,7 @@ void ClubLogService::onUploadReply()
         q.clublogSentDate = today;
     }
 
+    emit logMessage(tr("Successfully uploaded %1 QSO(s) to ClubLog.").arg(m_pendingUpload.size()));
     emit uploadFinished(m_pendingUpload, {});
     m_pendingUpload.clear();
 }

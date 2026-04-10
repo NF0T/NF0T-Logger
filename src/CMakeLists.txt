@@ -17,6 +17,8 @@ set(SOURCES
     ui/entrypanel/QsoEntryPanel.cpp
     ui/QsoEditDialog.cpp
     ui/QslColumns.cpp
+    ui/QslDownloadDialog.cpp
+    ui/QslUploadDialog.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
     qsl/LoTwService.cpp
@@ -49,6 +51,8 @@ set(HEADERS
     ui/entrypanel/QsoEntryPanel.h
     ui/QsoEditDialog.h
     ui/QslColumns.h
+    ui/QslDownloadDialog.h
+    ui/QslUploadDialog.h
     radio/HamlibBackend.h
     radio/TciBackend.h
     qsl/QslService.h

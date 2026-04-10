@@ -1,6 +1,7 @@
 #include "Settings.h"
 #include "SecureSettings.h"
 
+#include <QDate>
 #include <QSettings>
 
 // ---------------------------------------------------------------------------
@@ -246,6 +247,24 @@ void Settings::setClublogPassword(const QString &v) { SecureSettings::instance()
 
 QString Settings::clublogAppKey() const     { return SecureSettings::instance().get(SecureKey::CLUBLOG_APP_KEY); }
 void Settings::setClublogAppKey(const QString &v)   { SecureSettings::instance().set(SecureKey::CLUBLOG_APP_KEY, v); }
+
+// ---------------------------------------------------------------------------
+// QSL — last download timestamps
+// ---------------------------------------------------------------------------
+
+QDate Settings::qslLastDownloadDate(const QString &service) const
+{
+    const QString key = QStringLiteral("qsl/last_download/") + service.toLower().remove(QLatin1Char(' '));
+    const QVariant v = get(key, QVariant());
+    const QDate stored = v.toDate();
+    return stored.isValid() ? stored : QDate::currentDate().addDays(-90);
+}
+
+void Settings::setQslLastDownloadDate(const QString &service, const QDate &date)
+{
+    const QString key = QStringLiteral("qsl/last_download/") + service.toLower().remove(QLatin1Char(' '));
+    put(key, date);
+}
 
 // ---------------------------------------------------------------------------
 // UI state

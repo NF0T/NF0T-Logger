@@ -1,9 +1,10 @@
 #pragma once
 
 #include <optional>
+#include <QByteArray>
+#include <QDate>
 #include <QObject>
 #include <QString>
-#include <QByteArray>
 
 /// Typed settings singleton.
 /// Non-sensitive values are stored in QSettings (INI file).
@@ -209,6 +210,12 @@ public:
 
     QString clublogAppKey() const;
     void    setClublogAppKey(const QString &v);
+
+    // -----------------------------------------------------------------------
+    // QSL — last download timestamps (one per service, keyed by display name)
+    // -----------------------------------------------------------------------
+    QDate qslLastDownloadDate(const QString &service) const;
+    void  setQslLastDownloadDate(const QString &service, const QDate &date);
 
     // -----------------------------------------------------------------------
     // UI state (window geometry etc.)

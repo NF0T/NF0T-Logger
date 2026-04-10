@@ -20,9 +20,9 @@ public:
     QString displayName() const override { return QStringLiteral("eQSL"); }
     bool    isEnabled()   const override;
 
-    void startUpload  (const QList<Qso> &allQsos) override;
-    void startDownload()                           override;
-    void abort()                                   override;
+    void startUpload  (const QList<Qso> &allQsos)          override;
+    void startDownload(const QDate &from, const QDate &to) override;
+    void abort()                                            override;
 
 private slots:
     void onUploadReply();
