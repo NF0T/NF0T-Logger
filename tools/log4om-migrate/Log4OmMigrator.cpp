@@ -1,10 +1,11 @@
 #include "Log4OmMigrator.h"
 
 #include <QDate>
+#include <QJsonArray>
 #include <QJsonDocument>
-#include <QTimeZone>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QTimeZone>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -296,36 +297,27 @@ Qso Log4OmMigrator::rowToQso(const QSqlQuery &q)
 // ---------------------------------------------------------------------------
 // JSON QSL parser
 //
-// Log4OM v2 stores qsoconfirmations as a JSON object keyed by service name:
-//   {
-//     "LoTW":    { "QslSent": "Y", "QslRcvd": "Y",
-//                  "SentDate": "20240115", "RcvdDate": "20240116" },
-//     "eQSL":    { "QslSent": "Y", "QslRcvd": "N", "SentDate": "20240115" },
-//     "QRZ":     { "QslSent": "N", "QslRcvd": "N" },
-//     "ClubLog": { "QslSent": "Y", "SentDate": "20240115" }
-//   }
+// Log4OM v2 stores qsoconfirmations as a JSON array of objects:
+//   [
+//     { "CT": "LOTW",    "S": "Yes", "R": "No", "SD": "2023-06-17T00:00:00Z" },
+//     { "CT": "EQSL",    "S": "Yes", "R": "No", "SD": "2023-06-17T00:00:00Z" },
+//     { "CT": "QRZCOM",  "S": "Yes", "R": "No", "SD": "2023-10-21T20:53:40Z" },
+//     { "CT": "CLUBLOG", "S": "Yes", "R": "No", "SD": "2023-12-22T00:00:00Z" },
+//     { "CT": "QSL",     "S": "Yes", "R": "No" },
+//     { "CT": "HAMQTH",  "S": "No",  "R": "No" },
+//     { "CT": "HRDLOG",  "S": "No",  "R": "No" }
+//   ]
 //
-// Dates are YYYYMMDD strings (same as ADIF).
-// If the structure differs from your export, adjust the key names below.
+// "S"/"R" are "Yes"/"No". "SD"/"RD" are ISO 8601 datetime strings (date part used).
+// QSL (paper card), HAMQTH, and HRDLOG have no corresponding Qso fields — skipped.
 // ---------------------------------------------------------------------------
 
-static QChar parseStatus(const QJsonObject &obj, const QString &key)
+static QDate parseIsoDatetime(const QString &s)
 {
-    const QString v = obj.value(key).toString().toUpper();
-    if (v == QLatin1String("Y")) return 'Y';
-    if (v == QLatin1String("R")) return 'R';
-    if (v == QLatin1String("Q")) return 'Q';
-    if (v == QLatin1String("I")) return 'I';
-    return 'N';
-}
-
-static QDate parseAdifDate(const QString &s)
-{
-    // YYYYMMDD
-    if (s.length() == 8)
-        return QDate::fromString(s, QStringLiteral("yyyyMMdd"));
-    // ISO date fallback
-    return QDate::fromString(s, Qt::ISODate);
+    // Take the first 10 characters (YYYY-MM-DD) from an ISO 8601 datetime string
+    if (s.length() >= 10)
+        return QDate::fromString(s.left(10), Qt::ISODate);
+    return {};
 }
 
 void Log4OmMigrator::parseQsoConfirmations(const QString &json, Qso &qso)
@@ -333,41 +325,37 @@ void Log4OmMigrator::parseQsoConfirmations(const QString &json, Qso &qso)
     if (json.isEmpty()) return;
 
     const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
-    if (!doc.isObject()) return;
+    if (!doc.isArray()) return;
 
-    const QJsonObject root = doc.object();
+    for (const QJsonValue &val : doc.array()) {
+        if (!val.isObject()) continue;
+        const QJsonObject o = val.toObject();
 
-    // LoTW
-    if (root.contains(QLatin1String("LoTW"))) {
-        const QJsonObject o = root.value(QLatin1String("LoTW")).toObject();
-        qso.lotwQslSent = parseStatus(o, QStringLiteral("QslSent"));
-        qso.lotwQslRcvd = parseStatus(o, QStringLiteral("QslRcvd"));
-        qso.lotwSentDate = parseAdifDate(o.value(QStringLiteral("SentDate")).toString());
-        qso.lotwRcvdDate = parseAdifDate(o.value(QStringLiteral("RcvdDate")).toString());
-    }
+        const QString ct   = o.value(QLatin1String("CT")).toString();
+        const QChar   sent = o.value(QLatin1String("S")).toString() == QLatin1String("Yes") ? 'Y' : 'N';
+        const QChar   rcvd = o.value(QLatin1String("R")).toString() == QLatin1String("Yes") ? 'Y' : 'N';
+        const QDate   sd   = parseIsoDatetime(o.value(QLatin1String("SD")).toString());
+        const QDate   rd   = parseIsoDatetime(o.value(QLatin1String("RD")).toString());
 
-    // eQSL
-    if (root.contains(QLatin1String("eQSL"))) {
-        const QJsonObject o = root.value(QLatin1String("eQSL")).toObject();
-        qso.eqslQslSent = parseStatus(o, QStringLiteral("QslSent"));
-        qso.eqslQslRcvd = parseStatus(o, QStringLiteral("QslRcvd"));
-        qso.eqslSentDate = parseAdifDate(o.value(QStringLiteral("SentDate")).toString());
-        qso.eqslRcvdDate = parseAdifDate(o.value(QStringLiteral("RcvdDate")).toString());
-    }
-
-    // QRZ
-    if (root.contains(QLatin1String("QRZ"))) {
-        const QJsonObject o = root.value(QLatin1String("QRZ")).toObject();
-        qso.qrzQslSent = parseStatus(o, QStringLiteral("QslSent"));
-        qso.qrzQslRcvd = parseStatus(o, QStringLiteral("QslRcvd"));
-        qso.qrzSentDate = parseAdifDate(o.value(QStringLiteral("SentDate")).toString());
-        qso.qrzRcvdDate = parseAdifDate(o.value(QStringLiteral("RcvdDate")).toString());
-    }
-
-    // ClubLog (no inbound confirmation)
-    if (root.contains(QLatin1String("ClubLog"))) {
-        const QJsonObject o = root.value(QLatin1String("ClubLog")).toObject();
-        qso.clublogQslSent = parseStatus(o, QStringLiteral("QslSent"));
-        qso.clublogSentDate = parseAdifDate(o.value(QStringLiteral("SentDate")).toString());
+        if (ct == QLatin1String("LOTW")) {
+            qso.lotwQslSent = sent;
+            qso.lotwQslRcvd = rcvd;
+            if (sd.isValid()) qso.lotwSentDate = sd;
+            if (rd.isValid()) qso.lotwRcvdDate = rd;
+        } else if (ct == QLatin1String("EQSL")) {
+            qso.eqslQslSent = sent;
+            qso.eqslQslRcvd = rcvd;
+            if (sd.isValid()) qso.eqslSentDate = sd;
+            if (rd.isValid()) qso.eqslRcvdDate = rd;
+        } else if (ct == QLatin1String("QRZCOM")) {
+            qso.qrzQslSent = sent;
+            qso.qrzQslRcvd = rcvd;
+            if (sd.isValid()) qso.qrzSentDate = sd;
+            if (rd.isValid()) qso.qrzRcvdDate = rd;
+        } else if (ct == QLatin1String("CLUBLOG")) {
+            qso.clublogQslSent = sent;
+            if (sd.isValid()) qso.clublogSentDate = sd;
+        }
+        // QSL (paper), HAMQTH, HRDLOG — no corresponding Qso fields, skip
     }
 }
