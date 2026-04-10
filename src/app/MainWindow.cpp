@@ -263,10 +263,10 @@ void MainWindow::setupCentralWidget()
     auto *qslHeader = new QslGroupHeaderView(Qt::Horizontal, m_logView);
     qslHeader->setStretchLastSection(false);
     qslHeader->setHighlightSections(false);
-    qslHeader->setSectionResizeMode(QsoTableModel::ColName, QHeaderView::Stretch);
     m_logView->setHorizontalHeader(qslHeader);
 
     m_logView->setModel(m_logModel);
+    qslHeader->setSectionResizeMode(QsoTableModel::ColName, QHeaderView::Stretch);
     m_logView->setAlternatingRowColors(true);
     m_logView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_logView->setSelectionMode(QAbstractItemView::SingleSelection);
