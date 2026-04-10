@@ -25,10 +25,9 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     if (!rect.isValid()) return;
 
     painter->save();
-    painter->setClipRect(rect);
 
-    // Base call draws the themed background. headerData() returns "" for QSL
-    // columns so no text is rendered by the base.
+    // Clip base paint to this section so it cannot bleed.
+    painter->setClipRect(rect);
     QHeaderView::paintSection(painter, rect, logicalIndex);
 
     if (logicalIndex < QsoTableModel::ColQslFirst) {
@@ -39,7 +38,8 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     const int halfH  = rect.height() / 2;
     const int offset = logicalIndex - QsoTableModel::ColQslFirst;
 
-    // Horizontal divider between group row and sub-label row
+    // Horizontal divider
+    painter->setClipRect(rect);
     painter->setPen(palette().mid().color());
     painter->drawLine(rect.left(), rect.top() + halfH, rect.right(), rect.top() + halfH);
 
@@ -49,21 +49,28 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     painter->setPen(palette().windowText().color());
     painter->drawText(botRect, Qt::AlignCenter, QString::fromLatin1(kSubLabels[offset]));
 
-    // Top half — service group name, painted only by the left sub-column of each pair.
-    // We disable clipping so the text can span across the adjacent sub-column.
-    if (offset % 2 == 0) {
-        static const char *kGroupNames[] = { "LoTW", "eQSL", "QRZ", "ClubLog" };
-        const int nextW = (logicalIndex + 1 < count()) ? sectionSize(logicalIndex + 1) : 0;
-        const QRect groupRect(rect.x(), rect.top(), rect.width() + nextW, halfH);
+    // Top half — service group name centered across BOTH sub-columns.
+    // Both the left and right sub-column paint it so that whichever is painted
+    // last (right) leaves the correct final result.
+    static const char *kGroupNames[] = { "LoTW", "eQSL", "QRZ", "ClubLog" };
+    const int groupIdx = offset / 2;
+    const bool isLeft  = (offset % 2 == 0);
 
-        painter->setClipping(false);
-        QFont f = painter->font();
-        f.setBold(true);
-        painter->setFont(f);
-        painter->setPen(palette().windowText().color());
-        painter->drawText(groupRect, Qt::AlignCenter,
-                          QString::fromLatin1(kGroupNames[offset / 2]));
-    }
+    const int leftW  = isLeft  ? rect.width()
+                                : (logicalIndex - 1 >= 0 ? sectionSize(logicalIndex - 1) : 0);
+    const int rightW = isLeft  ? (logicalIndex + 1 < count() ? sectionSize(logicalIndex + 1) : 0)
+                                : rect.width();
+    const int spanX  = isLeft  ? rect.x() : rect.x() - leftW;
+    const QRect groupRect(spanX, rect.top(), leftW + rightW, halfH);
+
+    // Disable clipping so the text can draw freely across both columns.
+    painter->setClipping(false);
+    QFont f = painter->font();
+    f.setBold(true);
+    painter->setFont(f);
+    painter->setPen(palette().windowText().color());
+    painter->drawText(groupRect, Qt::AlignCenter,
+                      QString::fromLatin1(kGroupNames[groupIdx]));
 
     painter->restore();
 }
