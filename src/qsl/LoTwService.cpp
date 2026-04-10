@@ -78,7 +78,8 @@ void LoTwService::startUpload(const QList<Qso> &allQsos)
     }
 
     QStringList args;
-    args << QStringLiteral("-x")           // non-interactive
+    args << QStringLiteral("-x")           // batch mode: exit after processing
+         << QStringLiteral("-u")           // upload to LoTW after signing
          << QStringLiteral("-a") << QStringLiteral("compliant")
          << QStringLiteral("-l") << stationLocation
          << tempPath;
@@ -93,7 +94,8 @@ void LoTwService::startUpload(const QList<Qso> &allQsos)
 
 void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
 {
-    const QString stdErr = QString::fromLocal8Bit(m_tqsl->readAllStandardError());
+    const QString stdOut = QString::fromLocal8Bit(m_tqsl->readAllStandardOutput()).trimmed();
+    const QString stdErr = QString::fromLocal8Bit(m_tqsl->readAllStandardError()).trimmed();
     m_tqsl->deleteLater();
     m_tqsl = nullptr;
 
@@ -102,11 +104,15 @@ void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
         m_tempFile = nullptr;
     }
 
+    // Collect all tqsl output for the result message
+    QStringList tqslOutput;
+    if (!stdOut.isEmpty()) tqslOutput << stdOut;
+    if (!stdErr.isEmpty()) tqslOutput << stdErr;
+
     if (exitCode != 0) {
         QStringList errors;
         errors << tr("TQSL exited with code %1.").arg(exitCode);
-        if (!stdErr.isEmpty())
-            errors << stdErr;
+        errors << tqslOutput;
         emit uploadFinished({}, errors);
         m_pendingUpload.clear();
         return;
@@ -119,11 +125,7 @@ void LoTwService::onTqslFinished(int exitCode, int /*exitStatus*/)
         q.lotwSentDate = today;
     }
 
-    QStringList notes;
-    if (!stdErr.isEmpty())
-        notes << stdErr;
-
-    emit uploadFinished(m_pendingUpload, notes);
+    emit uploadFinished(m_pendingUpload, tqslOutput);
     m_pendingUpload.clear();
 }
 
