@@ -355,7 +355,12 @@ void Log4OmMigrator::parseQsoConfirmations(const QString &json, Qso &qso)
         } else if (ct == QLatin1String("CLUBLOG")) {
             qso.clublogQslSent = sent;
             if (sd.isValid()) qso.clublogSentDate = sd;
+        } else if (ct == QLatin1String("QSL")) {
+            qso.qslSent = sent;
+            qso.qslRcvd = rcvd;
+            if (sd.isValid()) qso.qslSentDate = sd;
+            if (rd.isValid()) qso.qslRcvdDate = rd;
         }
-        // QSL (paper), HAMQTH, HRDLOG — no corresponding Qso fields, skip
+        // HAMQTH, HRDLOG — no corresponding Qso fields, skip
     }
 }
