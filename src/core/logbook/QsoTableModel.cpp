@@ -5,7 +5,8 @@
 static const char *COL_HEADERS[] = {
     "Date", "Time (UTC)", "Callsign", "Band", "Mode", "Freq (MHz)",
     "RST Sent", "RST Rcvd", "Name", "Country", "Grid", "Dist (km)",
-    "LoTW", "eQSL", "QRZ", "ClubLog"
+    // QSL sub-columns — group names and S/R labels are painted by QslGroupHeaderView
+    "", "", "", "", "", "", "", ""
 };
 static_assert(sizeof(COL_HEADERS) / sizeof(COL_HEADERS[0]) == QsoTableModel::ColCount,
               "COL_HEADERS size mismatch with Column enum");
@@ -31,6 +32,22 @@ QVariant QsoTableModel::data(const QModelIndex &index, int role) const
 
     const Qso &q = m_qsos.at(index.row());
 
+    // QSL bubble columns — status char returned via UserRole; delegate paints the bubble
+    if (index.column() >= ColQslFirst) {
+        if (role != Qt::UserRole) return {};
+        switch (index.column()) {
+        case ColLotwS:    return QVariant(q.lotwQslSent);
+        case ColLotwR:    return QVariant(q.lotwQslRcvd);
+        case ColEqslS:    return QVariant(q.eqslQslSent);
+        case ColEqslR:    return QVariant(q.eqslQslRcvd);
+        case ColQrzS:     return QVariant(q.qrzQslSent);
+        case ColQrzR:     return QVariant(q.qrzQslRcvd);
+        case ColClublogS: return QVariant(q.clublogQslSent);
+        case ColClublogR: return {};   // always blank
+        default:          return {};
+        }
+    }
+
     if (role == Qt::DisplayRole) {
         switch (index.column()) {
         case ColDate:      return q.datetimeOn.toUTC().toString("yyyy-MM-dd");
@@ -48,28 +65,7 @@ QVariant QsoTableModel::data(const QModelIndex &index, int role) const
         case ColDistance:  return q.distance.has_value()
                                   ? QString::number(*q.distance, 'f', 0)
                                   : QString();
-        case ColLotw:      return qslDisplay(q.lotwQslSent, q.lotwQslRcvd);
-        case ColEqsl:      return qslDisplay(q.eqslQslSent, q.eqslQslRcvd);
-        case ColQrz:       return qslDisplay(q.qrzQslSent,  q.qrzQslRcvd);
-        case ColClublog:   return q.clublogQslSent == 'Y' ? QStringLiteral("Sent") : QString();
         default:           return {};
-        }
-    }
-
-    if (role == Qt::ForegroundRole) {
-        // Green = confirmed, Orange = sent/pending, default = not requested
-        auto qslColor = [](QChar rcvd, QChar sent) -> QVariant {
-            if (rcvd == 'Y') return QColor(Qt::darkGreen);
-            if (sent == 'Y') return QColor(0xE6, 0x8A, 0x00); // amber
-            return {};
-        };
-
-        switch (index.column()) {
-        case ColLotw:    return qslColor(q.lotwQslRcvd, q.lotwQslSent);
-        case ColEqsl:    return qslColor(q.eqslQslRcvd, q.eqslQslSent);
-        case ColQrz:     return qslColor(q.qrzQslRcvd,  q.qrzQslSent);
-        case ColClublog: return q.clublogQslSent == 'Y' ? QVariant(QColor(0xE6, 0x8A, 0x00)) : QVariant{};
-        default:         return {};
         }
     }
 
@@ -147,14 +143,3 @@ const Qso &QsoTableModel::qsoAt(int row) const
     return m_qsos.at(row);
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-QString QsoTableModel::qslDisplay(QChar sent, QChar rcvd)
-{
-    if (rcvd == 'Y') return QStringLiteral("Confirmed");
-    if (sent == 'Y') return QStringLiteral("Sent");
-    if (sent == 'R') return QStringLiteral("Requested");
-    return {};
-}

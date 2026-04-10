@@ -15,6 +15,7 @@ set(SOURCES
     core/BandPlan.cpp
     ui/entrypanel/QsoEntryPanel.cpp
     ui/QsoEditDialog.cpp
+    ui/QslColumns.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
     qsl/LoTwService.cpp
@@ -45,6 +46,7 @@ set(HEADERS
     core/BandPlan.h
     ui/entrypanel/QsoEntryPanel.h
     ui/QsoEditDialog.h
+    ui/QslColumns.h
     radio/HamlibBackend.h
     radio/TciBackend.h
     qsl/QslService.h

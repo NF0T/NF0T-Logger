@@ -24,12 +24,19 @@ public:
         ColCountry,
         ColGrid,
         ColDistance,
-        ColLotw,
-        ColEqsl,
-        ColQrz,
-        ColClublog,
-        ColCount   // sentinel — always last
+        // QSL — each service has two sub-columns painted as coloured bubbles
+        ColLotwS,
+        ColLotwR,
+        ColEqslS,
+        ColEqslR,
+        ColQrzS,
+        ColQrzR,
+        ColClublogS,
+        ColClublogR,   // always blank — ClubLog has no inbound confirmation
+        ColCount       // sentinel — always last
     };
+
+    static constexpr int ColQslFirst = ColLotwS;
 
     explicit QsoTableModel(QObject *parent = nullptr);
 
@@ -50,7 +57,5 @@ public:
     const Qso &qsoAt(int row) const;
 
 private:
-    static QString qslDisplay(QChar sent, QChar rcvd);
-
     QList<Qso> m_qsos;
 };

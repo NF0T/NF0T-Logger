@@ -37,6 +37,7 @@
 #include "radio/TciBackend.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 #include "ui/QsoEditDialog.h"
+#include "ui/QslColumns.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -280,16 +281,28 @@ void MainWindow::setupCentralWidget()
     // Log table (top pane)
     m_logModel = new QsoTableModel(this);
     m_logView  = new QTableView(m_splitter);
+
+    // Install grouped QSL header before setting the model
+    auto *qslHeader = new QslGroupHeaderView(Qt::Horizontal, m_logView);
+    qslHeader->setStretchLastSection(true);
+    qslHeader->setHighlightSections(false);
+    m_logView->setHorizontalHeader(qslHeader);
+
     m_logView->setModel(m_logModel);
     m_logView->setAlternatingRowColors(true);
     m_logView->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_logView->setSelectionMode(QAbstractItemView::SingleSelection);
     m_logView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_logView->setSortingEnabled(false);  // will enable once sort proxy is wired up
-    m_logView->horizontalHeader()->setStretchLastSection(true);
-    m_logView->horizontalHeader()->setHighlightSections(false);
+    m_logView->setSortingEnabled(false);
     m_logView->verticalHeader()->hide();
     m_logView->verticalHeader()->setDefaultSectionSize(22);
+
+    // Bubble delegate + narrow widths for QSL sub-columns
+    auto *bubbleDelegate = new QslBubbleDelegate(m_logView);
+    for (int c = QsoTableModel::ColQslFirst; c < QsoTableModel::ColCount; ++c) {
+        m_logView->setItemDelegateForColumn(c, bubbleDelegate);
+        m_logView->setColumnWidth(c, 24);
+    }
 
     // Double-click to edit
     connect(m_logView, &QTableView::doubleClicked,
