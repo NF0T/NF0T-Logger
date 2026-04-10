@@ -261,8 +261,9 @@ void MainWindow::setupCentralWidget()
 
     // Install grouped QSL header before setting the model
     auto *qslHeader = new QslGroupHeaderView(Qt::Horizontal, m_logView);
-    qslHeader->setStretchLastSection(true);
+    qslHeader->setStretchLastSection(false);
     qslHeader->setHighlightSections(false);
+    qslHeader->setSectionResizeMode(QsoTableModel::ColName, QHeaderView::Stretch);
     m_logView->setHorizontalHeader(qslHeader);
 
     m_logView->setModel(m_logModel);
