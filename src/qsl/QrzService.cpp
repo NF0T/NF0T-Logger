@@ -122,8 +122,10 @@ void QrzService::startDownload()
         return;
     }
 
+    // MODSINCE filters by last-modified date; STATUS:CONFIRMED limits to
+    // QSOs confirmed by the other station (QRZ's equivalent of QSL received).
     const QString since = QDate::currentDate().addDays(-90).toString(Qt::ISODate);
-    const QString option = QStringLiteral("TYPE:ADIF,SINCE:%1").arg(since);
+    const QString option = QStringLiteral("STATUS:CONFIRMED,MODSINCE:%1,TYPE:ADIF").arg(since);
 
     const QByteArray body = buildBody(apiKey, QStringLiteral("FETCH"), option);
 
@@ -167,12 +169,12 @@ void QrzService::onDownloadReply()
     qDebug() << "QRZ FETCH parsed — RESULT:" << result << "REASON:" << reason << "COUNT:" << count;
 
     if (result.compare(QLatin1String("OK"), Qt::CaseInsensitive) != 0) {
-        // "No records" is not an error
-        if (reason.contains(QLatin1String("No records"), Qt::CaseInsensitive) ||
-            (result.compare(QLatin1String("FAIL"), Qt::CaseInsensitive) == 0 && count == QLatin1String("0"))) {
+        // COUNT=0 with FAIL just means no matching records — not a real error
+        if (count == QLatin1String("0") ||
+            reason.contains(QLatin1String("No records"), Qt::CaseInsensitive)) {
             emit downloadFinished({}, {tr("QRZ: no new confirmations found.")});
         } else {
-            emit downloadFinished({}, {tr("QRZ fetch error: %1\nRaw response: %2")
+            emit downloadFinished({}, {tr("QRZ fetch error: %1\nFull response: %2")
                                            .arg(reason.isEmpty() ? result : reason, body)});
         }
         return;
