@@ -160,9 +160,9 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
     setRunning(false);
 
     if (errors.isEmpty() || !confirmed.isEmpty()) {
-        // Record the to-date as the new last-download date for this service
+        // Record today as the last-download date so the next From defaults here
         Settings::instance().setQslLastDownloadDate(
-            m_currentService->displayName(), m_toDate->date());
+            m_currentService->displayName(), QDate::currentDate());
     }
 
     if (!errors.isEmpty())
