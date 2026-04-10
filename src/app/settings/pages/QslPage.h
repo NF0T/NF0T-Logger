@@ -35,10 +35,4 @@ private:
     QLineEdit *m_qrzUsername   = nullptr;
     QLineEdit *m_qrzApiKey     = nullptr;
 
-    // ClubLog
-    QCheckBox *m_clublogEnabled  = nullptr;
-    QLineEdit *m_clublogEmail    = nullptr;
-    QLineEdit *m_clublogCallsign = nullptr;
-    QLineEdit *m_clublogPassword = nullptr;
-    QLineEdit *m_clublogAppKey   = nullptr;
 };

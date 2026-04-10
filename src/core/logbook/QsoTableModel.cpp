@@ -8,7 +8,7 @@ static const char *COL_HEADERS[] = {
     "RST Sent", "RST Rcvd", "Name", "Country", "Grid",
     "",    // ColDistance — dynamic, returned by headerData()
     // QSL sub-columns — group names and S/R labels are painted by QslGroupHeaderView
-    "", "", "", "", "", "", "", ""
+    "", "", "", "", "", ""
 };
 static_assert(sizeof(COL_HEADERS) / sizeof(COL_HEADERS[0]) == QsoTableModel::ColCount,
               "COL_HEADERS size mismatch with Column enum");
@@ -44,8 +44,6 @@ QVariant QsoTableModel::data(const QModelIndex &index, int role) const
         case ColEqslR:    return QVariant(q.eqslQslRcvd);
         case ColQrzS:     return QVariant(q.qrzQslSent);
         case ColQrzR:     return QVariant(q.qrzQslRcvd);
-        case ColClublogS: return QVariant(q.clublogQslSent);
-        case ColClublogR: return {};   // always blank
         default:          return {};
         }
     }

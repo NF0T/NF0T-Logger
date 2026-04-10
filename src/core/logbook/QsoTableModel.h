@@ -31,8 +31,6 @@ public:
         ColEqslR,
         ColQrzS,
         ColQrzR,
-        ColClublogS,
-        ColClublogR,   // always blank — ClubLog has no inbound confirmation
         ColCount       // sentinel — always last
     };
 

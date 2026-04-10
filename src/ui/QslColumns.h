@@ -5,8 +5,8 @@
 
 /// Two-row horizontal header that groups QSL sub-columns under service names.
 ///
-/// Top row:    "LoTW"    "eQSL"    "QRZ"    "ClubLog"   (spanning two sub-cols each)
-/// Bottom row:  S    R    S    R    S    R    S    (blank)
+/// Top row:    "LoTW"    "eQSL"    "QRZ"   (spanning two sub-cols each)
+/// Bottom row:  S    R    S    R    S    R
 class QslGroupHeaderView : public QHeaderView
 {
     Q_OBJECT

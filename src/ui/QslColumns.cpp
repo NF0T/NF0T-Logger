@@ -42,7 +42,7 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     painter->drawLine(rect.left(), rect.top() + halfH, rect.right(), rect.top() + halfH);
 
     // Bottom half — S / R sub-label
-    static const char *kSubLabels[] = { "S", "R", "S", "R", "S", "R", "S", "" };
+    static const char *kSubLabels[] = { "S", "R", "S", "R", "S", "R" };
     const QRect botRect(rect.x(), rect.top() + halfH, rect.width(), halfH);
     painter->setPen(palette().windowText().color());
     painter->drawText(botRect, Qt::AlignCenter, QString::fromLatin1(kSubLabels[offset]));
@@ -51,7 +51,7 @@ void QslGroupHeaderView::paintSection(QPainter *painter, const QRect &rect, int 
     // Because Qt paints left-to-right, the right column runs last and can safely
     // overdraw the inner vertical divider that the base class drew for the left column.
     if (isRight && logicalIndex - 1 >= 0) {
-        static const char *kGroupNames[] = { "LoTW", "eQSL", "QRZ", "ClubLog" };
+        static const char *kGroupNames[] = { "LoTW", "eQSL", "QRZ" };
 
         const int leftW   = sectionSize(logicalIndex - 1);
         const QRect span(rect.x() - leftW, rect.top(), leftW + rect.width(), halfH);

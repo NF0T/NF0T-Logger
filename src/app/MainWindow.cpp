@@ -520,7 +520,7 @@ void MainWindow::onQslDownload()
     if (!m_db) return;
 
     const QList<QslService*> services = {
-        m_lotwService, m_eqslService, m_qrzService, m_clublogService
+        m_lotwService, m_eqslService, m_qrzService
     };
     const QList<Qso> localQsos = m_db->fetchQsos().value_or(QList<Qso>{});
 
@@ -537,7 +537,7 @@ void MainWindow::onQslUpload()
     if (!m_db) return;
 
     const QList<QslService*> services = {
-        m_lotwService, m_eqslService, m_qrzService, m_clublogService
+        m_lotwService, m_eqslService, m_qrzService
     };
 
     QslUploadDialog dlg(services, m_db.get(), this);

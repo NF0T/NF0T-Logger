@@ -91,28 +91,9 @@ QslPage::QslPage(QWidget *parent)
     qrzForm->addRow(tr("API key:"),  m_qrzApiKey);
     qrzForm->addRow(keychainNote(qrzWidget));
 
-    // -----------------------------------------------------------------------
-    // ClubLog tab
-    // -----------------------------------------------------------------------
-    auto *clublogWidget  = new QWidget;
-    m_clublogEnabled     = new QCheckBox(tr("Enable ClubLog integration"), clublogWidget);
-    m_clublogEmail       = new QLineEdit(clublogWidget);
-    m_clublogCallsign    = new QLineEdit(clublogWidget);
-    m_clublogPassword    = makePasswordField(clublogWidget);
-    m_clublogAppKey      = makePasswordField(clublogWidget);
-
-    auto *clublogForm = new QFormLayout(clublogWidget);
-    clublogForm->addRow(m_clublogEnabled);
-    clublogForm->addRow(tr("Email:"),     m_clublogEmail);
-    clublogForm->addRow(tr("Callsign:"),  m_clublogCallsign);
-    clublogForm->addRow(tr("Password:"),  m_clublogPassword);
-    clublogForm->addRow(tr("App key:"),   m_clublogAppKey);
-    clublogForm->addRow(keychainNote(clublogWidget));
-
     tabs->addTab(lotwWidget,    tr("LoTW"));
     tabs->addTab(eqslWidget,    tr("eQSL"));
     tabs->addTab(qrzWidget,     tr("QRZ.com"));
-    tabs->addTab(clublogWidget, tr("ClubLog"));
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -138,11 +119,6 @@ void QslPage::load()
     m_qrzUsername->setText(s.qrzUsername());
     m_qrzApiKey->setText(s.qrzApiKey());
 
-    m_clublogEnabled->setChecked(s.clublogEnabled());
-    m_clublogEmail->setText(s.clublogEmail());
-    m_clublogCallsign->setText(s.clublogCallsign());
-    m_clublogPassword->setText(s.clublogPassword());
-    m_clublogAppKey->setText(s.clublogAppKey());
 }
 
 void QslPage::apply()
@@ -164,9 +140,4 @@ void QslPage::apply()
     s.setQrzUsername(m_qrzUsername->text().trimmed());
     s.setQrzApiKey(m_qrzApiKey->text().trimmed());
 
-    s.setClublogEnabled(m_clublogEnabled->isChecked());
-    s.setClublogEmail(m_clublogEmail->text().trimmed());
-    s.setClublogCallsign(m_clublogCallsign->text().toUpper().trimmed());
-    s.setClublogPassword(m_clublogPassword->text());
-    s.setClublogAppKey(m_clublogAppKey->text().trimmed());
 }
