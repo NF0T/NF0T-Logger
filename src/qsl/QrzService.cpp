@@ -199,8 +199,6 @@ void QrzService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(adif);
-    emit logMessage(tr("Parsed %1 confirmation(s) from QRZ.").arg(parsed.qsos.size()));
-
     // STATUS:CONFIRMED means every returned QSO is confirmed by the other station.
     const QDate today = QDate::currentDate();
     QList<Qso> confirmed = parsed.qsos;
@@ -208,6 +206,14 @@ void QrzService::onDownloadReply()
         q.qrzQslRcvd = 'Y';
         if (!q.qrzRcvdDate.isValid())
             q.qrzRcvdDate = today;
+    }
+
+    emit logMessage(tr("Parsed %1 confirmation(s) from QRZ:").arg(confirmed.size()));
+    for (const Qso &q : confirmed) {
+        emit logMessage(tr("  %1  %2  %3  %4")
+                            .arg(q.callsign,
+                                 q.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
+                                 q.band, q.mode));
     }
 
     emit downloadFinished(confirmed, parsed.warnings);

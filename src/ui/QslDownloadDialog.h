@@ -29,12 +29,13 @@ class QslDownloadDialog : public QDialog
 
 public:
     explicit QslDownloadDialog(const QList<QslService*> &services,
-                               QWidget *parent = nullptr);
+                               const QList<Qso>         &localQsos,
+                               QWidget                  *parent = nullptr);
 
 signals:
-    /// Emitted when a download operation finishes (success or error).
-    /// confirmed are stubs for DB matching; errors contains any messages.
-    void downloadCompleted(const QList<Qso> &confirmed, const QStringList &errors);
+    /// Emitted when matching is complete. matched contains the local Qso
+    /// records with rcvd fields updated — ready for direct DB write.
+    void downloadCompleted(const QList<Qso> &matched, const QStringList &errors);
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -50,6 +51,7 @@ private:
     void disconnectService();
 
     QList<QslService*>             m_services;
+    QList<Qso>                     m_localQsos;
     QslService                    *m_currentService = nullptr;
     bool                           m_running        = false;
     QList<QMetaObject::Connection> m_serviceConns;

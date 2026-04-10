@@ -522,8 +522,9 @@ void MainWindow::onQslDownload()
     const QList<QslService*> services = {
         m_lotwService, m_eqslService, m_qrzService, m_clublogService
     };
+    const QList<Qso> localQsos = m_db->fetchQsos().value_or(QList<Qso>{});
 
-    QslDownloadDialog dlg(services, this);
+    QslDownloadDialog dlg(services, localQsos, this);
     connect(&dlg, &QslDownloadDialog::downloadCompleted, this,
             [this](const QList<Qso> &confirmed, const QStringList &errors) {
         applyDownloadedConfirmations(confirmed, errors);
@@ -557,37 +558,18 @@ void MainWindow::applyUploadedQsos(const QList<Qso> &updated, const QStringList 
     statusBar()->showMessage(tr("QSL upload: %1 QSO(s) marked sent.").arg(updated.size()), 4000);
 }
 
-void MainWindow::applyDownloadedConfirmations(const QList<Qso> &confirmed,
+void MainWindow::applyDownloadedConfirmations(const QList<Qso> &matched,
                                                const QStringList &/*errors*/)
 {
-    if (confirmed.isEmpty() || !m_db) return;
+    // The dialog has already done matching and per-record logging.
+    // matched contains local Qso objects with rcvd fields updated — write directly.
+    if (matched.isEmpty() || !m_db) return;
 
-    const QList<Qso> local = m_db->fetchQsos().value_or(QList<Qso>{});
-    int matched = 0;
+    for (const Qso &q : matched)
+        std::ignore = m_db->updateQso(q);
 
-    for (const Qso &conf : confirmed) {
-        const QDate confDate = conf.datetimeOn.toUTC().date();
-        for (Qso match : local) {
-            if (match.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
-            if (match.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
-            if (match.mode.compare(conf.mode, Qt::CaseInsensitive) != 0) continue;
-            if (match.datetimeOn.toUTC().date() != confDate) continue;
-
-            // Copy confirmed rcvd fields — each service sets only what it knows
-            if (conf.lotwQslRcvd == 'Y') { match.lotwQslRcvd = 'Y'; match.lotwRcvdDate = conf.lotwRcvdDate; }
-            if (conf.eqslQslRcvd == 'Y') { match.eqslQslRcvd = 'Y'; match.eqslRcvdDate = conf.eqslRcvdDate; }
-            if (conf.qrzQslRcvd  == 'Y') { match.qrzQslRcvd  = 'Y'; match.qrzRcvdDate  = conf.qrzRcvdDate; }
-
-            std::ignore = m_db->updateQso(match);
-            ++matched;
-            break;
-        }
-    }
-
-    if (matched > 0) {
-        reloadLog();
-        statusBar()->showMessage(tr("QSL download: %1 QSO(s) updated.").arg(matched), 4000);
-    }
+    reloadLog();
+    statusBar()->showMessage(tr("QSL download: %1 QSO(s) updated.").arg(matched.size()), 4000);
 }
 
 void MainWindow::onQsoReady(const Qso &qso)

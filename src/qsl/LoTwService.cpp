@@ -221,7 +221,13 @@ void LoTwService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(body);
-    emit logMessage(tr("Parsed %1 confirmation(s) from LoTW.").arg(parsed.qsos.size()));
+    emit logMessage(tr("Parsed %1 confirmation(s) from LoTW:").arg(parsed.qsos.size()));
+    for (const Qso &q : parsed.qsos) {
+        emit logMessage(tr("  %1  %2  %3  %4")
+                            .arg(q.callsign,
+                                 q.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
+                                 q.band, q.mode));
+    }
 
     emit downloadFinished(parsed.qsos, parsed.warnings);
 }

@@ -17,8 +17,11 @@
 #include "app/settings/Settings.h"
 #include "qsl/QslService.h"
 
-QslDownloadDialog::QslDownloadDialog(const QList<QslService*> &services, QWidget *parent)
+QslDownloadDialog::QslDownloadDialog(const QList<QslService*> &services,
+                                       const QList<Qso>         &localQsos,
+                                       QWidget                  *parent)
     : QDialog(parent)
+    , m_localQsos(localQsos)
 {
     setWindowTitle(tr("Download QSL Confirmations"));
     setMinimumSize(640, 480);
@@ -159,23 +162,77 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
     disconnectService();
     setRunning(false);
 
+    if (!errors.isEmpty())
+        appendLog(tr("Warnings: %1").arg(errors.join(QLatin1String("; "))));
+
+    // -----------------------------------------------------------------------
+    // Match each confirmed stub against the local log and log per-record status
+    // -----------------------------------------------------------------------
+    QList<Qso> matched;
+
+    if (!confirmed.isEmpty()) {
+        appendLog(tr("--- Matching %1 record(s) against local log ---")
+                      .arg(confirmed.size()));
+
+        int cntNew = 0, cntAlready = 0, cntNotFound = 0;
+
+        for (const Qso &conf : confirmed) {
+            const QString key = QStringLiteral("%1  %2  %3  %4")
+                                    .arg(conf.callsign,
+                                         conf.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
+                                         conf.band, conf.mode);
+
+            bool found = false;
+            for (Qso local : m_localQsos) {
+                if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
+                if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
+                if (local.mode.compare(conf.mode, Qt::CaseInsensitive) != 0) continue;
+                if (local.datetimeOn.toUTC().date() != conf.datetimeOn.toUTC().date()) continue;
+
+                found = true;
+
+                const bool alreadyLoTW = (conf.lotwQslRcvd == 'Y' && local.lotwQslRcvd == 'Y');
+                const bool alreadyEqsl = (conf.eqslQslRcvd == 'Y' && local.eqslQslRcvd == 'Y');
+                const bool alreadyQrz  = (conf.qrzQslRcvd  == 'Y' && local.qrzQslRcvd  == 'Y');
+
+                if (alreadyLoTW || alreadyEqsl || alreadyQrz) {
+                    appendLog(tr("  %1 — already confirmed, skipping").arg(key));
+                    ++cntAlready;
+                } else {
+                    if (conf.lotwQslRcvd == 'Y') { local.lotwQslRcvd = 'Y'; local.lotwRcvdDate = conf.lotwRcvdDate; }
+                    if (conf.eqslQslRcvd == 'Y') { local.eqslQslRcvd = 'Y'; local.eqslRcvdDate = conf.eqslRcvdDate; }
+                    if (conf.qrzQslRcvd  == 'Y') { local.qrzQslRcvd  = 'Y'; local.qrzRcvdDate  = conf.qrzRcvdDate; }
+                    appendLog(tr("  %1 — new confirmation").arg(key));
+                    matched.append(local);
+                    ++cntNew;
+                }
+                break;
+            }
+
+            if (!found) {
+                appendLog(tr("  %1 — no matching QSO in log").arg(key));
+                ++cntNotFound;
+            }
+        }
+
+        appendLog(tr("--- Result: %1 new, %2 already confirmed, %3 not found ---")
+                      .arg(cntNew).arg(cntAlready).arg(cntNotFound));
+    }
+
+    // Save today as last-download date on any non-error result
     if (errors.isEmpty() || !confirmed.isEmpty()) {
-        // Record today as the last-download date so the next From defaults here
         Settings::instance().setQslLastDownloadDate(
             m_currentService->displayName(), QDate::currentDate());
     }
 
-    if (!errors.isEmpty())
-        appendLog(tr("Warnings: %1").arg(errors.join(QLatin1String("; "))));
-
-    const QString summary = confirmed.isEmpty()
-        ? tr("No new confirmations found.")
-        : tr("Download complete — %1 confirmation(s) received.").arg(confirmed.size());
+    const QString summary = matched.isEmpty()
+        ? tr("No new confirmations to apply.")
+        : tr("Download complete — %1 new confirmation(s) applied.").arg(matched.size());
 
     appendLog(summary);
     m_statusLabel->setText(summary);
 
-    emit downloadCompleted(confirmed, errors);
+    emit downloadCompleted(matched, errors);
 }
 
 // ---------------------------------------------------------------------------
