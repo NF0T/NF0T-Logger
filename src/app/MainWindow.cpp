@@ -493,7 +493,7 @@ void MainWindow::onSettingsDialog()
 {
     SettingsDialog dlg(this);
     dlg.exec();
-    // Refresh status bar callsign if station settings changed
+    reloadLog();       // picks up unit changes, callsign changes, etc.
     updateQsoCount();
 }
 

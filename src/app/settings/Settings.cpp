@@ -87,6 +87,12 @@ void Settings::setStationLon(std::optional<double> v)
 }
 
 // ---------------------------------------------------------------------------
+// Display preferences
+// ---------------------------------------------------------------------------
+
+bool Settings::useMetricUnits() const       { return get("display/metric_units", false); }
+void Settings::setUseMetricUnits(bool v)    { put("display/metric_units", v); }
+
 // Equipment
 // ---------------------------------------------------------------------------
 

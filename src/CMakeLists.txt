@@ -9,6 +9,7 @@ set(SOURCES
     app/settings/pages/DatabasePage.cpp
     app/settings/pages/RadioPage.cpp
     app/settings/pages/QslPage.cpp
+    app/settings/pages/DisplayPage.cpp
     core/logbook/QsoTableModel.cpp
     core/adif/AdifParser.cpp
     core/adif/AdifWriter.cpp
@@ -38,6 +39,7 @@ set(HEADERS
     app/settings/pages/DatabasePage.h
     app/settings/pages/RadioPage.h
     app/settings/pages/QslPage.h
+    app/settings/pages/DisplayPage.h
     core/logbook/Qso.h
     core/logbook/QsoFilter.h
     core/logbook/QsoTableModel.h

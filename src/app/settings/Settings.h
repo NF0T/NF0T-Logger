@@ -53,6 +53,12 @@ public:
     void    setStationLon(std::optional<double> v);
 
     // -----------------------------------------------------------------------
+    // Display preferences
+    // -----------------------------------------------------------------------
+    bool    useMetricUnits() const;       // false = imperial (miles), true = metric (km)
+    void    setUseMetricUnits(bool v);
+
+    // -----------------------------------------------------------------------
     // Equipment defaults
     // -----------------------------------------------------------------------
     QString equipmentRig() const;

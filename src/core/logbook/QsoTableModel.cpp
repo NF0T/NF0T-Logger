@@ -1,10 +1,12 @@
 #include "QsoTableModel.h"
 
 #include <QColor>
+#include "app/settings/Settings.h"
 
 static const char *COL_HEADERS[] = {
     "Date", "Time (UTC)", "Callsign", "Band", "Mode", "Freq (MHz)",
-    "RST Sent", "RST Rcvd", "Name", "Country", "Grid", "Dist (km)",
+    "RST Sent", "RST Rcvd", "Name", "Country", "Grid",
+    "",    // ColDistance — dynamic, returned by headerData()
     // QSL sub-columns — group names and S/R labels are painted by QslGroupHeaderView
     "", "", "", "", "", "", "", ""
 };
@@ -62,9 +64,12 @@ QVariant QsoTableModel::data(const QModelIndex &index, int role) const
         case ColName:      return q.name;
         case ColCountry:   return q.country;
         case ColGrid:      return q.gridsquare;
-        case ColDistance:  return q.distance.has_value()
-                                  ? QString::number(*q.distance, 'f', 0)
-                                  : QString();
+        case ColDistance: {
+            if (!q.distance.has_value()) return {};
+            const bool metric = Settings::instance().useMetricUnits();
+            const double val  = metric ? *q.distance : *q.distance * 0.621371;
+            return QString::number(val, 'f', 0);
+        }
         default:           return {};
         }
     }
@@ -84,9 +89,11 @@ QVariant QsoTableModel::data(const QModelIndex &index, int role) const
 
 QVariant QsoTableModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
-    if (orientation == Qt::Horizontal && role == Qt::DisplayRole && section < ColCount)
-        return QString::fromUtf8(COL_HEADERS[section]);
-    return {};
+    if (orientation != Qt::Horizontal || role != Qt::DisplayRole || section >= ColCount)
+        return {};
+    if (section == ColDistance)
+        return Settings::instance().useMetricUnits() ? tr("Dist (km)") : tr("Dist (mi)");
+    return QString::fromUtf8(COL_HEADERS[section]);
 }
 
 // ---------------------------------------------------------------------------
