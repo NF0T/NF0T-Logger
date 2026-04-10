@@ -46,6 +46,7 @@ MigrateResult Log4OmMigrator::migrate(const MigrateOptions &opts)
             result.errorDetails << QStringLiteral("Cannot connect to Log4OM database: %1")
                                        .arg(src.lastError().text());
             ++result.errors;
+            src = QSqlDatabase(); // release handle before removeDatabase
             QSqlDatabase::removeDatabase(srcConn);
             return result;
         }
