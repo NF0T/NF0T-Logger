@@ -182,15 +182,26 @@ void EqslService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(body);
-    emit logMessage(tr("Parsed %1 confirmation(s) from eQSL:").arg(parsed.qsos.size()));
-    for (const Qso &q : parsed.qsos) {
+
+    // We requested ConfirmedOnly=1, so every returned record is confirmed.
+    // eQSL's ADIF does not carry EQSL_QSL_RCVD:1:Y, so force it explicitly.
+    const QDate today = QDate::currentDate();
+    QList<Qso> confirmed = parsed.qsos;
+    for (Qso &q : confirmed) {
+        q.eqslQslRcvd = 'Y';
+        if (!q.eqslRcvdDate.isValid())
+            q.eqslRcvdDate = today;
+    }
+
+    emit logMessage(tr("Parsed %1 confirmation(s) from eQSL:").arg(confirmed.size()));
+    for (const Qso &q : confirmed) {
         emit logMessage(tr("  %1  %2  %3  %4")
                             .arg(q.callsign,
                                  q.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
                                  q.band, q.mode));
     }
 
-    emit downloadFinished(parsed.qsos, parsed.warnings);
+    emit downloadFinished(confirmed, parsed.warnings);
 }
 
 // ---------------------------------------------------------------------------

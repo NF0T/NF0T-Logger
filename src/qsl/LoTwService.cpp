@@ -221,15 +221,28 @@ void LoTwService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(body);
-    emit logMessage(tr("Parsed %1 confirmation(s) from LoTW:").arg(parsed.qsos.size()));
-    for (const Qso &q : parsed.qsos) {
+
+    // LoTW's report endpoint only returns QSOs that have been confirmed by the
+    // other station (qso_qslsince filters to received confirmations).  The ADIF
+    // may or may not carry LOTW_QSL_RCVD:1:Y depending on the LoTW server
+    // version, so force the flag explicitly on every returned record.
+    const QDate today = QDate::currentDate();
+    QList<Qso> confirmed = parsed.qsos;
+    for (Qso &q : confirmed) {
+        q.lotwQslRcvd = 'Y';
+        if (!q.lotwRcvdDate.isValid())
+            q.lotwRcvdDate = today;
+    }
+
+    emit logMessage(tr("Parsed %1 confirmation(s) from LoTW:").arg(confirmed.size()));
+    for (const Qso &q : confirmed) {
         emit logMessage(tr("  %1  %2  %3  %4")
                             .arg(q.callsign,
                                  q.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
                                  q.band, q.mode));
     }
 
-    emit downloadFinished(parsed.qsos, parsed.warnings);
+    emit downloadFinished(confirmed, parsed.warnings);
 }
 
 // ---------------------------------------------------------------------------
