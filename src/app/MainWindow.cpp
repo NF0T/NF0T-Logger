@@ -161,6 +161,17 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    // Disconnect and shut down radio backends before Qt's child destruction
+    // order can deliver signals to already-destroyed status bar widgets.
+    if (m_tciBackend) {
+        disconnect(m_tciBackend, nullptr, this, nullptr);
+        m_tciBackend->disconnectTci();
+    }
+    if (m_hamlibBackend) {
+        disconnect(m_hamlibBackend, nullptr, this, nullptr);
+        m_hamlibBackend->disconnectRig();
+    }
+
     Settings::instance().setMainWindowGeometry(saveGeometry());
     Settings::instance().setMainWindowState(saveState());
     if (m_splitter)
