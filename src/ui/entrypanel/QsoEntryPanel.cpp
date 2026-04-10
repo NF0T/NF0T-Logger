@@ -2,6 +2,7 @@
 
 #include <QComboBox>
 #include <QDateTimeEdit>
+#include <QTimeZone>
 #include <QDoubleSpinBox>
 #include <QFont>
 #include <QFrame>
@@ -32,6 +33,7 @@ QsoEntryPanel::QsoEntryPanel(QWidget *parent)
     // Row 1: Date/Time | Callsign | Band | Freq | Mode | Submode
     // -----------------------------------------------------------------------
     m_dateTime = new QDateTimeEdit(this);
+    m_dateTime->setTimeZone(QTimeZone::utc());
     m_dateTime->setDisplayFormat("yyyy-MM-dd HH:mm:ss");
     m_dateTime->setFixedWidth(168);
     m_dateTime->setToolTip(tr("QSO start time (UTC)"));
@@ -409,8 +411,7 @@ bool QsoEntryPanel::validate() const
 Qso QsoEntryPanel::buildQso() const
 {
     Qso q;
-    q.datetimeOn  = m_dateTime->dateTime();
-    q.datetimeOn.setTimeZone(QTimeZone::utc());
+    q.datetimeOn  = m_dateTime->dateTime().toUTC();
     q.callsign    = m_callsign->text().toUpper().trimmed();
 
     const QString band = (m_band->currentIndex() > 0) ? m_band->currentText() : QString();
