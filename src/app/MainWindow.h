@@ -40,6 +40,8 @@ private slots:
     void onSettingsDialog();
     void onAbout();
     void onQsoReady(const Qso &qso);
+    void onEditQso(const QModelIndex &index);
+    void onDeleteSelectedQso();
     void onConnectHamlib();
     void onConnectTci();
     void onDisconnectRadio();

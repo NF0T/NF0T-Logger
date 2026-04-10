@@ -15,8 +15,12 @@
 #include <QWidget>
 
 #include <QCloseEvent>
+#include <QContextMenuEvent>
 #include <QFileDialog>
+#include <QKeySequence>
+#include <QMenu>
 #include <QProgressDialog>
+#include <QShortcut>
 
 #include "app/settings/SecureSettings.h"
 #include "app/settings/Settings.h"
@@ -32,6 +36,7 @@
 #include "radio/HamlibBackend.h"
 #include "radio/TciBackend.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
+#include "ui/QsoEditDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -285,6 +290,32 @@ void MainWindow::setupCentralWidget()
     m_logView->horizontalHeader()->setHighlightSections(false);
     m_logView->verticalHeader()->hide();
     m_logView->verticalHeader()->setDefaultSectionSize(22);
+
+    // Double-click to edit
+    connect(m_logView, &QTableView::doubleClicked,
+            this, &MainWindow::onEditQso);
+
+    // Right-click context menu
+    m_logView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_logView, &QTableView::customContextMenuRequested,
+            this, [this](const QPoint &pos) {
+        const QModelIndex idx = m_logView->indexAt(pos);
+        if (!idx.isValid()) return;
+        m_logView->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::SelectCurrent | QItemSelectionModel::Rows);
+
+        QMenu menu(this);
+        QAction *editAct   = menu.addAction(tr("Edit QSO…"));
+        QAction *deleteAct = menu.addAction(tr("Delete QSO"));
+        const QAction *chosen = menu.exec(m_logView->viewport()->mapToGlobal(pos));
+        if (chosen == editAct)
+            onEditQso(idx);
+        else if (chosen == deleteAct)
+            onDeleteSelectedQso();
+    });
+
+    // Delete key shortcut
+    auto *deleteShortcut = new QShortcut(QKeySequence::Delete, m_logView);
+    connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::onDeleteSelectedQso);
 
     // Bottom pane — QSO entry panel
     m_entryPanel = new QsoEntryPanel(m_splitter);
@@ -656,4 +687,54 @@ void MainWindow::onQsoReady(const Qso &qso)
     updateQsoCount();
     statusBar()->showMessage(
         tr("Logged: %1").arg(inserted.callsign), 3000);
+}
+
+void MainWindow::onEditQso(const QModelIndex &index)
+{
+    if (!index.isValid() || !m_db) return;
+
+    const int row = index.row();
+    const Qso original = m_logModel->qsoAt(row);
+
+    QsoEditDialog dlg(original, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    Qso updated = dlg.qso();
+    if (!m_db->updateQso(updated)) {
+        QMessageBox::warning(this, tr("Edit Failed"),
+            tr("Could not save changes:\n%1").arg(m_db->lastError()));
+        return;
+    }
+
+    m_logModel->updateQso(row, updated);
+    statusBar()->showMessage(tr("QSO updated: %1").arg(updated.callsign), 3000);
+}
+
+void MainWindow::onDeleteSelectedQso()
+{
+    if (!m_db) return;
+
+    const QModelIndex idx = m_logView->currentIndex();
+    if (!idx.isValid()) return;
+
+    const int row = idx.row();
+    const Qso &q = m_logModel->qsoAt(row);
+
+    const auto reply = QMessageBox::question(
+        this, tr("Delete QSO"),
+        tr("Delete QSO with %1 on %2?\nThis cannot be undone.")
+            .arg(q.callsign, q.datetimeOn.toUTC().toString("yyyy-MM-dd HH:mm")),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) return;
+
+    if (!m_db->deleteQso(q.id)) {
+        QMessageBox::warning(this, tr("Delete Failed"),
+            tr("Could not delete QSO:\n%1").arg(m_db->lastError()));
+        return;
+    }
+
+    m_logModel->removeQso(row);
+    updateQsoCount();
+    statusBar()->showMessage(tr("QSO deleted: %1").arg(q.callsign), 3000);
 }

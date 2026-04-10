@@ -14,6 +14,7 @@ set(SOURCES
     core/adif/AdifWriter.cpp
     core/BandPlan.cpp
     ui/entrypanel/QsoEntryPanel.cpp
+    ui/QsoEditDialog.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
     qsl/LoTwService.cpp
@@ -43,6 +44,7 @@ set(HEADERS
     core/adif/AdifWriter.h
     core/BandPlan.h
     ui/entrypanel/QsoEntryPanel.h
+    ui/QsoEditDialog.h
     radio/HamlibBackend.h
     radio/TciBackend.h
     qsl/QslService.h
