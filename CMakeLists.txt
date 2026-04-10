@@ -35,3 +35,4 @@ else()
 endif()
 
 add_subdirectory(src)
+add_subdirectory(tools/log4om-migrate)
