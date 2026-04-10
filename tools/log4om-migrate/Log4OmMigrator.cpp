@@ -111,7 +111,7 @@ MigrateResult Log4OmMigrator::migrate(const MigrateOptions &opts)
             "name, notes, nrbursts, nrpings, operator, ownercallsign, pfx, "
             "precedence, propmode, qslmsg, qslvia, qsoconfirmations, qsocomplete, "
             "qth, rstrcvd, rstsent, rxpwr, satmode, satname, sfi, sig, siginfo, "
-            "srx, srxstring, stationcallsign, stx, stxstring, "
+            "srx, srxstring, state, stationcallsign, stx, stxstring, "
             "sunspots, txpwr, swl "
             "FROM log");
 
