@@ -193,7 +193,47 @@ Qso Log4OmMigrator::rowToQso(const QSqlQuery &q)
     // Core contact fields
     qso.callsign    = str("callsign").toUpper();
     qso.band        = str("band").toLower();
-    qso.mode        = str("mode").toUpper();
+
+    // Normalise mode to ADIF 3.1.4 spec.
+    // Log4OM stores some modes as standalone values that the spec defines as
+    // submodes (e.g. PSK31 → MODE=PSK/SUBMODE=PSK31, FT4 → MODE=MFSK/SUBMODE=FT4)
+    // and uses old names for renamed modes (PACKET→PKT, THROB→THRB, CONTESTIA→CONTESTI).
+    {
+        const QString rawMode = str("mode").toUpper();
+        struct ModeMap { const char *from; const char *toMode; const char *toSub; };
+        static const ModeMap kMap[] = {
+            {"PSK31",     "PSK",      "PSK31"},
+            {"PSK63",     "PSK",      "PSK63"},
+            {"PSK125",    "PSK",      "PSK125"},
+            {"PSK250",    "PSK",      "PSK250"},
+            {"PSK500",    "PSK",      "PSK500"},
+            {"PSK1000",   "PSK",      "PSK1000"},
+            {"BPSK31",    "PSK",      "BPSK31"},
+            {"BPSK63",    "PSK",      "BPSK63"},
+            {"QPSK31",    "PSK",      "QPSK31"},
+            {"QPSK63",    "PSK",      "QPSK63"},
+            {"FT4",       "MFSK",     "FT4"},
+            {"FST4",      "MFSK",     "FST4"},
+            {"FST4W",     "MFSK",     "FST4W"},
+            {"JS8",       "MFSK",     "JS8"},
+            {"Q65",       "MFSK",     "Q65"},
+            {"PACKET",    "PKT",      nullptr},
+            {"THROB",     "THRB",     nullptr},
+            {"CONTESTIA", "CONTESTI", nullptr},
+        };
+        bool mapped = false;
+        for (const auto &m : kMap) {
+            if (rawMode == QLatin1String(m.from)) {
+                qso.mode    = QString::fromLatin1(m.toMode);
+                qso.submode = m.toSub ? QString::fromLatin1(m.toSub) : QString();
+                mapped = true;
+                break;
+            }
+        }
+        if (!mapped)
+            qso.mode = rawMode;
+    }
+
     qso.datetimeOn  = q.value(QLatin1String("qsodate")).toDateTime().toTimeZone(QTimeZone::utc());
     qso.datetimeOff = q.value(QLatin1String("qsoenddate")).toDateTime();
     if (!qso.datetimeOff.isNull())

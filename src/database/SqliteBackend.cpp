@@ -39,7 +39,7 @@ std::expected<void, QString> SqliteBackend::initSchema()
     vq.exec("SELECT MAX(version) FROM schema_version");
     const int currentVersion = (vq.next() && !vq.value(0).isNull()) ? vq.value(0).toInt() : 0;
 
-    if (currentVersion >= 1)
+    if (currentVersion >= 2)
         return {};   // Up to date — add future migrations here
 
     // --- v1: main schema ---
@@ -175,6 +175,58 @@ std::expected<void, QString> SqliteBackend::initSchema()
     vins.bindValue(":v", 1);
     if (!vins.exec())
         return std::unexpected(vins.lastError().text());
+
+    // --- v2: normalise mode names to ADIF 3.1.4 spec ---
+    // Standalone PSK submodes → mode='PSK', submode=<variant>
+    // These were stored as top-level mode values by the log4om importer and
+    // older logger conventions.  The UNIQUE constraint is on (callsign,
+    // datetime_on, band, mode) so we update mode+submode together.
+    if (currentVersion < 2) {
+        static const struct { const char *oldMode; const char *newMode; const char *newSub; } kModeMap[] = {
+            // PSK submodes
+            {"PSK31",      "PSK", "PSK31"},
+            {"PSK63",      "PSK", "PSK63"},
+            {"PSK125",     "PSK", "PSK125"},
+            {"PSK250",     "PSK", "PSK250"},
+            {"PSK500",     "PSK", "PSK500"},
+            {"PSK1000",    "PSK", "PSK1000"},
+            {"BPSK31",     "PSK", "BPSK31"},
+            {"BPSK63",     "PSK", "BPSK63"},
+            {"QPSK31",     "PSK", "QPSK31"},
+            {"QPSK63",     "PSK", "QPSK63"},
+            // MFSK submodes stored as top-level
+            {"FT4",        "MFSK", "FT4"},
+            {"FST4",       "MFSK", "FST4"},
+            {"FST4W",      "MFSK", "FST4W"},
+            {"JS8",        "MFSK", "JS8"},
+            {"Q65",        "MFSK", "Q65"},
+            // Renamed modes (submode unchanged)
+            {"PACKET",     "PKT",      nullptr},
+            {"THROB",      "THRB",     nullptr},
+            {"CONTESTIA",  "CONTESTI", nullptr},
+        };
+
+        for (const auto &map : kModeMap) {
+            QSqlQuery uq(m_db);
+            if (map.newSub) {
+                uq.prepare("UPDATE qsos SET mode=:m, submode=:s WHERE mode=:old AND (submode IS NULL OR submode='')");
+                uq.bindValue(":m",   QString::fromLatin1(map.newMode));
+                uq.bindValue(":s",   QString::fromLatin1(map.newSub));
+                uq.bindValue(":old", QString::fromLatin1(map.oldMode));
+            } else {
+                uq.prepare("UPDATE qsos SET mode=:m WHERE mode=:old");
+                uq.bindValue(":m",   QString::fromLatin1(map.newMode));
+                uq.bindValue(":old", QString::fromLatin1(map.oldMode));
+            }
+            uq.exec();  // non-fatal — rows simply may not exist
+        }
+
+        QSqlQuery v2ins(m_db);
+        v2ins.prepare("INSERT INTO schema_version (version) VALUES (:v)");
+        v2ins.bindValue(":v", 2);
+        if (!v2ins.exec())
+            return std::unexpected(v2ins.lastError().text());
+    }
 
     return {};
 }
