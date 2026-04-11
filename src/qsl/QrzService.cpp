@@ -165,8 +165,16 @@ void QrzService::onDownloadReply()
 
     emit logMessage(tr("Received %1 byte(s) from QRZ.").arg(body.size()));
 
-    // Response is URL-encoded; DATA key contains the ADIF
-    QUrlQuery response(body);
+    // The QRZ response is nominally URL-encoded, but the DATA field contains raw
+    // ADIF which itself has '&' and '=' characters — QUrlQuery mangles it.
+    // Strategy: parse the small header fields (RESULT/REASON/COUNT) from the
+    // portion before "DATA=", then extract DATA as everything after "DATA=".
+    const QString dataMarker = QStringLiteral("DATA=");
+    const int dataPos = body.indexOf(dataMarker);
+
+    // Header portion (safe to parse with QUrlQuery — no ADIF yet)
+    const QString header = (dataPos >= 0) ? body.left(dataPos) : body;
+    QUrlQuery response(header);
     const QString result = response.queryItemValue(QStringLiteral("RESULT"));
     const QString reason = response.queryItemValue(QStringLiteral("REASON"));
     const QString count  = response.queryItemValue(QStringLiteral("COUNT"));
@@ -185,10 +193,10 @@ void QrzService::onDownloadReply()
         return;
     }
 
-    const QString adif = response.queryItemValue(QStringLiteral("DATA"));
-    emit logMessage(tr("DATA field length: %1 char(s).").arg(adif.size()));
-    if (!adif.isEmpty())
-        emit logMessage(tr("DATA preview: %1").arg(adif.left(300).trimmed()));
+    // Extract the raw ADIF — everything after "DATA="
+    const QString adif = (dataPos >= 0)
+                         ? QUrl::fromPercentEncoding(body.mid(dataPos + dataMarker.size()).toUtf8())
+                         : QString();
 
     if (adif.isEmpty()) {
         emit logMessage(tr("Parsed 0 confirmation(s) from QRZ."));
@@ -197,8 +205,6 @@ void QrzService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(adif);
-    emit logMessage(tr("Parser returned %1 QSO(s), %2 warning(s).")
-                        .arg(parsed.qsos.size()).arg(parsed.warnings.size()));
 
     if (!parsed.warnings.isEmpty()) {
         emit logMessage(tr("Parser warnings:"));
