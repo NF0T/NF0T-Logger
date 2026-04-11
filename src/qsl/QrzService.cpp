@@ -186,6 +186,10 @@ void QrzService::onDownloadReply()
     }
 
     const QString adif = response.queryItemValue(QStringLiteral("DATA"));
+    emit logMessage(tr("DATA field length: %1 char(s).").arg(adif.size()));
+    if (!adif.isEmpty())
+        emit logMessage(tr("DATA preview: %1").arg(adif.left(300).trimmed()));
+
     if (adif.isEmpty()) {
         emit logMessage(tr("Parsed 0 confirmation(s) from QRZ."));
         emit downloadFinished({}, {});
@@ -193,6 +197,8 @@ void QrzService::onDownloadReply()
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(adif);
+    emit logMessage(tr("Parser returned %1 QSO(s), %2 warning(s).")
+                        .arg(parsed.qsos.size()).arg(parsed.warnings.size()));
 
     if (!parsed.warnings.isEmpty()) {
         emit logMessage(tr("Parser warnings:"));
