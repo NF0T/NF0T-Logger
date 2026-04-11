@@ -124,8 +124,6 @@ void QrzService::onUploadReply()
 
 void QrzService::startDownload(const QDate &from, const QDate &to)
 {
-    Q_UNUSED(to)   // QRZ API has no end-date parameter
-
     const QString apiKey = SecureSettings::instance().get(SecureKey::QRZ_API_KEY);
     if (apiKey.isEmpty()) {
         const QString err = tr("QRZ API key not configured.");
@@ -135,12 +133,11 @@ void QrzService::startDownload(const QDate &from, const QDate &to)
     }
 
     const QString since = from.toString(Qt::ISODate);
-    emit logMessage(tr("Requesting QRZ confirmations since %1...").arg(since));
+    const QString toStr = to.toString(Qt::ISODate);
+    emit logMessage(tr("Requesting QRZ confirmations (%1 to %2)...").arg(since, toStr));
 
     const QString option = QStringLiteral("STATUS:CONFIRMED,MODSINCE:%1,TYPE:ADIF").arg(since);
     const QByteArray body = buildBody(apiKey, QStringLiteral("FETCH"), option);
-
-    emit logMessage(tr("FETCH option: %1").arg(option));
 
     QNetworkRequest req(API_URL);
     req.setHeader(QNetworkRequest::ContentTypeHeader,
@@ -174,15 +171,12 @@ void QrzService::onDownloadReply()
     const QString reason = response.queryItemValue(QStringLiteral("REASON"));
     const QString count  = response.queryItemValue(QStringLiteral("COUNT"));
 
-    emit logMessage(tr("QRZ response — RESULT: %1  REASON: %2  COUNT: %3")
-                        .arg(result, reason, count));
-
     if (result.compare(QLatin1String("OK"), Qt::CaseInsensitive) != 0) {
-        // COUNT=0 with FAIL just means no matching records — not a real error
+        // COUNT=0 / "No records" is not an error — just nothing new
         if (count == QLatin1String("0") ||
             reason.contains(QLatin1String("No records"), Qt::CaseInsensitive)) {
-            emit logMessage(tr("No new confirmations found."));
-            emit downloadFinished({}, {tr("QRZ: no new confirmations found.")});
+            emit logMessage(tr("Parsed 0 confirmation(s) from QRZ."));
+            emit downloadFinished({}, {});
         } else {
             const QString err = tr("QRZ fetch error: %1").arg(reason.isEmpty() ? result : reason);
             emit logMessage(err);
@@ -193,12 +187,19 @@ void QrzService::onDownloadReply()
 
     const QString adif = response.queryItemValue(QStringLiteral("DATA"));
     if (adif.isEmpty()) {
-        emit logMessage(tr("No new confirmations found."));
-        emit downloadFinished({}, {tr("QRZ: no new confirmations found.")});
+        emit logMessage(tr("Parsed 0 confirmation(s) from QRZ."));
+        emit downloadFinished({}, {});
         return;
     }
 
     const AdifParser::Result parsed = AdifParser::parseString(adif);
+
+    if (!parsed.warnings.isEmpty()) {
+        emit logMessage(tr("Parser warnings:"));
+        for (const QString &w : parsed.warnings)
+            emit logMessage(tr("  %1").arg(w));
+    }
+
     // STATUS:CONFIRMED means every returned QSO is confirmed by the other station.
     const QDate today = QDate::currentDate();
     QList<Qso> confirmed = parsed.qsos;
