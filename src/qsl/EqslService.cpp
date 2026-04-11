@@ -4,6 +4,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QUrlQuery>
 
 #include "app/settings/SecureSettings.h"
@@ -124,8 +125,6 @@ void EqslService::onUploadReply()
 
 void EqslService::startDownload(const QDate &from, const QDate &to)
 {
-    Q_UNUSED(to)   // eQSL API has no end-date parameter
-
     const Settings &s    = Settings::instance();
     const QString   user = s.eqslUsername();
     const QString   pass = SecureSettings::instance().get(SecureKey::EQSL_PASSWORD);
@@ -137,15 +136,17 @@ void EqslService::startDownload(const QDate &from, const QDate &to)
         return;
     }
 
-    // eQSL expects MM/DD/YYYY
-    const QString sinceStr = from.toString(QStringLiteral("MM/dd/yyyy"));
-    emit logMessage(tr("Requesting eQSL inbox for %1 since %2...").arg(user, sinceStr));
+    // eQSL API date format: MM/DD/YYYY; QUrlQuery will percent-encode slashes as %2F
+    const QString fromStr = from.toString(QStringLiteral("MM/dd/yyyy"));
+    const QString toStr   = to.toString(QStringLiteral("MM/dd/yyyy"));
+    emit logMessage(tr("Requesting eQSL inbox for %1 (%2 to %3)...").arg(user, fromStr, toStr));
 
     QUrl url = DOWNLOAD_URL;
     QUrlQuery q;
     q.addQueryItem(QStringLiteral("UserName"),      user);
     q.addQueryItem(QStringLiteral("Password"),      pass);
-    q.addQueryItem(QStringLiteral("RcvdSince"),     sinceStr);
+    q.addQueryItem(QStringLiteral("LimitDateLo"),   fromStr);
+    q.addQueryItem(QStringLiteral("LimitDateHi"),   toStr);
     q.addQueryItem(QStringLiteral("ConfirmedOnly"), QStringLiteral("1"));
     url.setQuery(q);
 
@@ -156,35 +157,79 @@ void EqslService::startDownload(const QDate &from, const QDate &to)
     connect(m_reply, &QNetworkReply::finished, this, &EqslService::onDownloadReply);
 }
 
+// Step 1: eQSL returns an HTML page. On success it contains "built" and a link to the
+// generated .adi file. Parse out that link and fetch it in step 2.
 void EqslService::onDownloadReply()
 {
     m_reply->deleteLater();
 
     if (m_reply->error() != QNetworkReply::NoError) {
-        const QString err = tr("eQSL download error: %1").arg(m_reply->errorString());
+        const QString err = tr("eQSL error: %1").arg(m_reply->errorString());
         emit logMessage(err);
         emit downloadFinished({}, {err});
         m_reply = nullptr;
         return;
     }
 
-    const QString body = QString::fromUtf8(m_reply->readAll());
+    const QString body    = QString::fromUtf8(m_reply->readAll());
+    const QUrl    baseUrl = m_reply->url();
     m_reply = nullptr;
 
-    emit logMessage(tr("Received %1 byte(s) from eQSL.").arg(body.size()));
+    emit logMessage(tr("Received index page (%1 byte(s)) from eQSL.").arg(body.size()));
 
-    // Log the first 500 characters of the raw response to aid diagnosis
-    emit logMessage(tr("Response preview: %1").arg(body.left(500).trimmed()));
-
-    if (body.contains(QLatin1String("Error"), Qt::CaseInsensitive) &&
-        !body.contains(QLatin1String("<call:"), Qt::CaseInsensitive)) {
-        const QString err = tr("eQSL download error: %1").arg(body.trimmed());
-        emit logMessage(err);
-        emit downloadFinished({}, {err});
+    if (!body.contains(QLatin1String("built"), Qt::CaseInsensitive)) {
+        // Something went wrong — log non-tag lines so the error text is readable
+        emit logMessage(tr("eQSL did not build an ADIF file. Response:"));
+        const QStringList lines = body.left(3000).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        for (const QString &line : lines) {
+            const QString t = line.trimmed();
+            if (!t.isEmpty() && !t.startsWith(QLatin1Char('<')))
+                emit logMessage(QStringLiteral("  ") + t);
+        }
+        emit downloadFinished({}, {tr("eQSL did not build an ADIF file.")});
         return;
     }
 
-    const AdifParser::Result parsed = AdifParser::parseString(body);
+    // Extract the href to the .adi (or .txt) file eQSL generated
+    static const QRegularExpression linkRe(
+        QStringLiteral("href=\"([^\"]+\\.(?:adi|txt))\""),
+        QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch match = linkRe.match(body);
+    if (!match.hasMatch()) {
+        emit logMessage(tr("eQSL: ADIF link not found in response page."));
+        emit downloadFinished({}, {tr("eQSL: ADIF link not found in response.")});
+        return;
+    }
+
+    const QUrl adifUrl = baseUrl.resolved(QUrl(match.captured(1)));
+    emit logMessage(tr("Fetching ADIF file from eQSL..."));
+
+    QNetworkRequest req(adifUrl);
+    req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("NF0T Logger/0.1"));
+
+    m_reply = m_nam->get(req);
+    connect(m_reply, &QNetworkReply::finished, this, &EqslService::onAdifFileReply);
+}
+
+// Step 2: Parse the actual ADIF file returned by eQSL.
+void EqslService::onAdifFileReply()
+{
+    m_reply->deleteLater();
+
+    if (m_reply->error() != QNetworkReply::NoError) {
+        const QString err = tr("eQSL ADIF fetch error: %1").arg(m_reply->errorString());
+        emit logMessage(err);
+        emit downloadFinished({}, {err});
+        m_reply = nullptr;
+        return;
+    }
+
+    const QString adif = QString::fromUtf8(m_reply->readAll());
+    m_reply = nullptr;
+
+    emit logMessage(tr("Received ADIF file (%1 byte(s)) from eQSL.").arg(adif.size()));
+
+    const AdifParser::Result parsed = AdifParser::parseString(adif);
 
     if (!parsed.warnings.isEmpty()) {
         emit logMessage(tr("Parser warnings:"));
