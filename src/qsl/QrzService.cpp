@@ -164,17 +164,16 @@ void QrzService::onDownloadReply()
     m_reply = nullptr;
 
     emit logMessage(tr("Received %1 byte(s) from QRZ.").arg(body.size()));
-    emit logMessage(tr("Raw response prefix: %1").arg(body.left(400).trimmed()));
 
-    // The QRZ response is nominally URL-encoded, but the DATA field contains raw
-    // ADIF which itself has '&' and '=' characters — QUrlQuery mangles it.
-    // Strategy: parse the small header fields (RESULT/REASON/COUNT) from the
-    // portion before "DATA=", then extract DATA as everything after "DATA=".
-    const QString dataMarker = QStringLiteral("DATA=");
-    const int dataPos = body.indexOf(dataMarker);
+    // The QRZ response looks like URL-encoded key=value pairs, but the ADIF
+    // field is HTML-entity encoded (< as &lt; etc.) and contains literal '&'
+    // and '=' which break QUrlQuery.  Split manually at "ADIF=" and parse
+    // the small header portion (RESULT/REASON/COUNT) separately.
+    const QString adifMarker = QStringLiteral("ADIF=");
+    const int adifPos = body.indexOf(adifMarker);
 
     // Header portion (safe to parse with QUrlQuery — no ADIF yet)
-    const QString header = (dataPos >= 0) ? body.left(dataPos) : body;
+    const QString header = (adifPos >= 0) ? body.left(adifPos) : body;
     QUrlQuery response(header);
     const QString result = response.queryItemValue(QStringLiteral("RESULT"));
     const QString reason = response.queryItemValue(QStringLiteral("REASON"));
@@ -194,9 +193,17 @@ void QrzService::onDownloadReply()
         return;
     }
 
-    // Extract the raw ADIF — everything after "DATA="
-    const QString adif = (dataPos >= 0)
-                         ? QUrl::fromPercentEncoding(body.mid(dataPos + dataMarker.size()).toUtf8())
+    // Extract the ADIF — everything after "ADIF=", then unescape HTML entities.
+    // QRZ encodes < > & " as &lt; &gt; &amp; &quot; in the response body.
+    auto htmlUnescape = [](QString s) {
+        s.replace(QLatin1String("&lt;"),  QLatin1String("<"));
+        s.replace(QLatin1String("&gt;"),  QLatin1String(">"));
+        s.replace(QLatin1String("&amp;"), QLatin1String("&"));
+        s.replace(QLatin1String("&quot;"),QLatin1String("\""));
+        return s;
+    };
+    const QString adif = (adifPos >= 0)
+                         ? htmlUnescape(body.mid(adifPos + adifMarker.size()))
                          : QString();
 
     if (adif.isEmpty()) {
