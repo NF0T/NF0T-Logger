@@ -218,6 +218,23 @@ public:
     void  setQslLastDownloadDate(const QString &service, const QDate &date);
 
     // -----------------------------------------------------------------------
+    // WSJT-X UDP listener
+    // -----------------------------------------------------------------------
+    bool    wsjtxEnabled() const;
+    void    setWsjtxEnabled(bool v);
+
+    quint16 wsjtxPort() const;
+    void    setWsjtxPort(quint16 v);
+
+    /// UDP address to bind/join. Use a multicast address (e.g. 224.0.0.1)
+    /// to receive alongside GridTracker2/JTAlert, or leave empty for unicast.
+    QString wsjtxUdpAddress() const;
+    void    setWsjtxUdpAddress(const QString &v);
+
+    bool    wsjtxAutoLog() const;    // auto-insert QSOLogged QSOs to DB
+    void    setWsjtxAutoLog(bool v);
+
+    // -----------------------------------------------------------------------
     // UI state (window geometry etc.)
     // -----------------------------------------------------------------------
     QByteArray mainWindowGeometry() const;

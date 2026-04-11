@@ -267,6 +267,22 @@ void Settings::setQslLastDownloadDate(const QString &service, const QDate &date)
 }
 
 // ---------------------------------------------------------------------------
+// WSJT-X
+// ---------------------------------------------------------------------------
+
+bool    Settings::wsjtxEnabled() const              { return get("wsjtx/enabled", false); }
+void    Settings::setWsjtxEnabled(bool v)           { put("wsjtx/enabled", v); }
+
+quint16 Settings::wsjtxPort() const                 { return static_cast<quint16>(get("wsjtx/port", 2237)); }
+void    Settings::setWsjtxPort(quint16 v)           { put("wsjtx/port", static_cast<int>(v)); }
+
+QString Settings::wsjtxUdpAddress() const            { return get("wsjtx/udp_address", QStringLiteral("224.0.0.1")); }
+void    Settings::setWsjtxUdpAddress(const QString &v) { put("wsjtx/udp_address", v); }
+
+bool    Settings::wsjtxAutoLog() const              { return get("wsjtx/auto_log", true); }
+void    Settings::setWsjtxAutoLog(bool v)           { put("wsjtx/auto_log", v); }
+
+// ---------------------------------------------------------------------------
 // UI state
 // ---------------------------------------------------------------------------
 

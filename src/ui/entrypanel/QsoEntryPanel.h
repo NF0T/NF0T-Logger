@@ -36,6 +36,13 @@ public:
     /// Called by radio backends when the rig's mode changes.
     void setRadioMode(const QString &mode, const QString &submode = {});
 
+    /// Called by WSJT-X listener when the selected DX callsign changes.
+    /// Only updates the field if it is currently empty.
+    void setDxCall(const QString &call);
+
+    /// Called by WSJT-X listener to pre-populate the grid field.
+    void setDxGrid(const QString &grid);
+
 public slots:
     /// Reset to a blank contact, preserving band/mode/power from last entry.
     void clearForm();

@@ -9,6 +9,7 @@ set(SOURCES
     app/settings/pages/DatabasePage.cpp
     app/settings/pages/RadioPage.cpp
     app/settings/pages/QslPage.cpp
+    app/settings/pages/WsjtxPage.cpp
     app/settings/pages/DisplayPage.cpp
     core/logbook/QsoTableModel.cpp
     core/adif/AdifParser.cpp
@@ -21,6 +22,7 @@ set(SOURCES
     ui/QslUploadDialog.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
+    wsjtx/WsjtxService.cpp
     qsl/LoTwService.cpp
     qsl/EqslService.cpp
     qsl/QrzService.cpp
@@ -41,6 +43,7 @@ set(HEADERS
     app/settings/pages/DatabasePage.h
     app/settings/pages/RadioPage.h
     app/settings/pages/QslPage.h
+    app/settings/pages/WsjtxPage.h
     app/settings/pages/DisplayPage.h
     core/logbook/Qso.h
     core/logbook/QsoFilter.h
@@ -55,6 +58,7 @@ set(HEADERS
     ui/QslUploadDialog.h
     radio/HamlibBackend.h
     radio/TciBackend.h
+    wsjtx/WsjtxService.h
     qsl/QslService.h
     qsl/LoTwService.h
     qsl/EqslService.h

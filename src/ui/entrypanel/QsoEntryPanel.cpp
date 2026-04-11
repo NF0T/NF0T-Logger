@@ -284,6 +284,19 @@ void QsoEntryPanel::setRadioMode(const QString &mode, const QString &submode)
     }
 }
 
+void QsoEntryPanel::setDxCall(const QString &call)
+{
+    // Only pre-populate if the operator hasn't started typing
+    if (m_callsign->text().isEmpty())
+        m_callsign->setText(call.toUpper());
+}
+
+void QsoEntryPanel::setDxGrid(const QString &grid)
+{
+    if (m_grid->text().isEmpty())
+        m_grid->setText(grid.toUpper());
+}
+
 // ---------------------------------------------------------------------------
 // Slots
 // ---------------------------------------------------------------------------

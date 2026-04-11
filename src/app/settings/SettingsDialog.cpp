@@ -14,6 +14,7 @@
 #include "pages/RadioPage.h"
 #include "pages/QslPage.h"
 #include "pages/DisplayPage.h"
+#include "pages/WsjtxPage.h"
 
 SettingsDialog::SettingsDialog(QWidget *parent)
     : QDialog(parent)
@@ -42,6 +43,7 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     addPage(new DatabasePage(this));
     addPage(new RadioPage(this));
     addPage(new QslPage(this));
+    addPage(new WsjtxPage(this));
     addPage(new DisplayPage(this));
 
     // Load all pages from current settings

@@ -25,6 +25,7 @@
 #include "app/settings/SecureSettings.h"
 #include "app/settings/Settings.h"
 #include "app/settings/SettingsDialog.h"
+#include "wsjtx/WsjtxService.h"
 #include "core/adif/AdifParser.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
@@ -137,6 +138,53 @@ MainWindow::MainWindow(QWidget *parent)
     m_eqslService    = new EqslService(this);
     m_qrzService     = new QrzService(this);
     m_clublogService = new ClubLogService(this);
+
+    // WSJT-X listener
+    m_wsjtxService = new WsjtxService(this);
+
+    connect(m_wsjtxService, &WsjtxService::statusReceived,
+            this, [this](const WsjtxService::Status &s) {
+        // Only update freq/mode from WSJT-X when no hardware radio backend
+        // is connected — Hamlib/TCI take precedence.
+        const bool radioConnected = m_hamlibBackend->isConnected()
+                                 || m_tciBackend->isConnected();
+        if (!radioConnected) {
+            if (s.dialFreqHz > 0)
+                m_entryPanel->setRadioFreq(static_cast<double>(s.dialFreqHz) / 1e6);
+            if (!s.mode.isEmpty())
+                m_entryPanel->setRadioMode(s.mode, s.submode);
+        }
+        // Always pre-populate DX call / grid (only if field is empty)
+        if (!s.dxCall.isEmpty())
+            m_entryPanel->setDxCall(s.dxCall);
+        if (!s.dxGrid.isEmpty())
+            m_entryPanel->setDxGrid(s.dxGrid);
+    });
+
+    connect(m_wsjtxService, &WsjtxService::qsoLogged,
+            this, [this](const Qso &qso) {
+        if (!Settings::instance().wsjtxAutoLog()) return;
+        onQsoReady(qso);
+    });
+
+    connect(m_wsjtxService, &WsjtxService::heartbeat,
+            this, [this](const QString &clientId, const QString &version, int) {
+        statusBar()->showMessage(
+            tr("WSJT-X heartbeat: %1 v%2").arg(clientId, version), 3000);
+    });
+
+    // Re-apply listener settings whenever settings change
+    connect(&Settings::instance(), &Settings::changed, this, [this]() {
+        const Settings &s = Settings::instance();
+        if (s.wsjtxEnabled() && !m_wsjtxService->isRunning())
+            m_wsjtxService->start(s.wsjtxPort(), s.wsjtxUdpAddress());
+        else if (!s.wsjtxEnabled() && m_wsjtxService->isRunning())
+            m_wsjtxService->stop();
+    });
+
+    if (Settings::instance().wsjtxEnabled())
+        m_wsjtxService->start(Settings::instance().wsjtxPort(),
+                              Settings::instance().wsjtxUdpAddress());
 }
 
 MainWindow::~MainWindow() = default;

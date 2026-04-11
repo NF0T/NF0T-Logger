@@ -21,6 +21,7 @@ class QrzService;
 class QsoEntryPanel;
 class QsoTableModel;
 class TciBackend;
+class WsjtxService;
 
 class MainWindow : public QMainWindow
 {
@@ -76,6 +77,9 @@ private:
     EqslService    *m_eqslService    = nullptr;
     QrzService     *m_qrzService     = nullptr;
     ClubLogService *m_clublogService = nullptr;
+
+    // WSJT-X listener
+    WsjtxService   *m_wsjtxService   = nullptr;
 
     // Central layout
     QSplitter     *m_splitter   = nullptr;
