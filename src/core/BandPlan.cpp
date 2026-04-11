@@ -46,32 +46,58 @@ static const int s_bandCount = sizeof(s_bands) / sizeof(s_bands[0]);
 // Mode table
 // ---------------------------------------------------------------------------
 static const ModeEntry s_modes[] = {
+    // Voice / traditional
     {"SSB",          "59",  {"USB", "LSB"}},
     {"CW",           "599", {}},
     {"AM",           "59",  {}},
-    {"FM",           "59",  {"FM", "DV"}},
-    {"FT8",          "+0",  {}},
-    {"FT4",          "+0",  {}},
-    {"JS8",          "+0",  {}},
-    {"MSK144",       "+0",  {}},
-    {"JT65",         "+0",  {}},
-    {"JT9",          "+0",  {}},
-    {"WSPR",         "-10", {}},
-    {"RTTY",         "599", {"RTTY", "AFSK"}},
-    {"PSK31",        "599", {"BPSK31","QPSK31","PSK31R"}},
-    {"PSK63",        "599", {"BPSK63","QPSK63"}},
-    {"OLIVIA",       "599", {}},
-    {"MFSK",         "599", {"MFSK8","MFSK16","MFSK32","MFSK64"}},
-    {"THOR",         "599", {}},
-    {"DOMINO",       "599", {}},
-    {"MT63",         "599", {}},
-    {"THROB",        "599", {}},
+    {"FM",           "59",  {"DV"}},
     {"SSTV",         "59",  {}},
-    {"DIGITALVOICE", "59",  {"C4FM","DMR","DSTAR","P25","YSF"}},
-    {"PACKET",       "599", {}},
     {"ATV",          "59",  {}},
-    {"HELL",         "599", {}},
-    {"CONTESTIA",    "599", {}},
+    {"DIGITALVOICE", "59",  {"C4FM","DMR","DSTAR","FREEDV","M17","P25","YSF"}},
+
+    // Weak-signal digital (WSJT-X family) — standalone per ADIF spec
+    {"FT8",          "+0",  {}},
+    // FT4, JS8, FST4, FST4W, Q65 are ADIF submodes of MFSK, but are listed
+    // here as top-level entries so users can select them directly in the UI.
+    // normaliseMode() in QslDownloadDialog maps them to MFSK/submode for matching.
+    {"FT4",          "+0",  {}},
+    {"FST4",         "+0",  {}},
+    {"FST4W",        "+0",  {}},
+    {"JS8",          "+0",  {}},
+    {"Q65",          "+0",  {}},
+    {"MSK144",       "+0",  {}},
+    {"JT65",         "+0",  {"JT65A","JT65B","JT65C"}},
+    {"JT9",          "+0",  {"JT9-1","JT9-2","JT9-5","JT9-10","JT9-30"}},
+    {"WSPR",         "-10", {}},
+
+    // Data / keyboard modes
+    {"RTTY",         "599", {"ASCI"}},
+    {"PSK",          "599", {"BPSK31","BPSK63","BPSK125","BPSK250","BPSK500",
+                              "BPSK1000","QPSK31","QPSK63","QPSK125","QPSK250",
+                              "QPSK500","PSK10","PSK31","PSK63","PSK63F","PSK125",
+                              "PSK250","PSK500","PSK1000","PSKAM10","PSKAM31",
+                              "PSKAM50","PSK2K"}},
+    {"OLIVIA",       "599", {"OLIVIA 4/125","OLIVIA 4/250","OLIVIA 8/250",
+                              "OLIVIA 8/500","OLIVIA 16/500","OLIVIA 16/1000",
+                              "OLIVIA 32/1000"}},
+    {"MFSK",         "599", {"FT4","FST4","FST4W","FSQCALL","JS8","JTMS",
+                              "MFSK4","MFSK8","MFSK11","MFSK16","MFSK22",
+                              "MFSK31","MFSK32","MFSK64","MFSK64L",
+                              "MFSK128","MFSK128L","Q65"}},
+    {"CONTESTI",     "599", {}},
+    {"DOMINO",       "599", {"DOM-M","DOM4","DOM5","DOM8","DOM11","DOM16",
+                              "DOM22","DOM44","DOM88","DOMINOEX","DOMINOF"}},
+    {"HELL",         "599", {"FMHELL","FSKHELL","HELL80","HELLX5","HELLX9",
+                              "HFSK","PSKHELL","SLOWHELL"}},
+    {"MT63",         "599", {}},
+    {"THOR",         "599", {"THOR-M","THOR4","THOR5","THOR8","THOR11",
+                              "THOR16","THOR22","THOR25X4","THOR50X1",
+                              "THOR50X2","THOR100"}},
+    {"THRB",         "599", {"THRBX","THRBX1","THRBX2","THRBX4",
+                              "THROB1","THROB2","THROB4"}},
+
+    // Other
+    {"PKT",          "599", {}},
 };
 static const int s_modeCount = sizeof(s_modes) / sizeof(s_modes[0]);
 

@@ -25,24 +25,44 @@
 // common logger convention).  Normalise both to a canonical pair so the
 // matching logic handles either representation.
 // ---------------------------------------------------------------------------
+// Resolve both ADIF-spec and common-logger representations of a mode to a
+// canonical (MODE, SUBMODE) pair so QSL matching is service-agnostic.
+//
+// Rules derived from ADIF 3.1.4 mode enumeration:
+//   • FT4, FST4, FST4W, JS8, Q65 are submodes of MFSK
+//   • PSK31, PSK63 (and variants) are submodes of PSK
+//   • Renamed modes: PACKET→PKT, THROB→THRB, CONTESTIA→CONTESTI
 static QPair<QString,QString> normaliseMode(const QString &mode, const QString &submode)
 {
-    const QString m = mode.toUpper();
-    const QString s = submode.toUpper();
+    const QString m = mode.toUpper().trimmed();
+    const QString s = submode.toUpper().trimmed();
 
-    // ADIF spec: FT4 is MFSK / FT4 — accept either spelling
-    if (m == QLatin1String("FT4"))                                return {"MFSK", "FT4"};
-    if (m == QLatin1String("MFSK") && s == QLatin1String("FT4")) return {"MFSK", "FT4"};
+    // ---- MFSK submodes ----
+    // Accept both "FT4" standalone (our UI convention) and "MFSK"/"FT4" (ADIF spec)
+    static const QStringList mfskSubs = {
+        "FT4", "FST4", "FST4W", "JS8", "Q65",
+        "FSQCALL", "JTMS",
+        "MFSK4","MFSK8","MFSK11","MFSK16","MFSK22",
+        "MFSK31","MFSK32","MFSK64","MFSK64L","MFSK128","MFSK128L"
+    };
+    if (mfskSubs.contains(m))                       return {"MFSK", m};
+    if (m == QLatin1String("MFSK") && !s.isEmpty()) return {"MFSK", s};
 
-    // FST4 / FST4W live under MFSK too
-    if (m == QLatin1String("FST4"))                                return {"MFSK", "FST4"};
-    if (m == QLatin1String("MFSK") && s == QLatin1String("FST4")) return {"MFSK", "FST4"};
-    if (m == QLatin1String("FST4W"))                               return {"MFSK", "FST4W"};
-    if (m == QLatin1String("MFSK") && s == QLatin1String("FST4W"))return {"MFSK", "FST4W"};
+    // ---- PSK submodes ----
+    // PSK31/PSK63 are commonly stored as top-level modes in older loggers
+    static const QStringList pskSubs = {
+        "PSK31","PSK63","PSK125","PSK250","PSK500","PSK1000",
+        "PSK10","PSK63F","PSK2K","PSKAM10","PSKAM31","PSKAM50",
+        "BPSK31","BPSK63","BPSK125","BPSK250","BPSK500","BPSK1000",
+        "QPSK31","QPSK63","QPSK125","QPSK250","QPSK500"
+    };
+    if (pskSubs.contains(m))                       return {"PSK", m};
+    if (m == QLatin1String("PSK") && !s.isEmpty()) return {"PSK", s};
 
-    // JS8 / JS8Call
-    if (m == QLatin1String("JS8") || (m == QLatin1String("MFSK") && s == QLatin1String("JS8")))
-        return {"MFSK", "JS8"};
+    // ---- Renamed modes ----
+    if (m == QLatin1String("PACKET") || m == QLatin1String("PKT"))       return {"PKT",      s};
+    if (m == QLatin1String("THROB")  || m == QLatin1String("THRB"))      return {"THRB",     s};
+    if (m == QLatin1String("CONTESTIA") || m == QLatin1String("CONTESTI")) return {"CONTESTI", s};
 
     return {m, s};
 }
