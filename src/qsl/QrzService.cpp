@@ -164,6 +164,7 @@ void QrzService::onDownloadReply()
     m_reply = nullptr;
 
     emit logMessage(tr("Received %1 byte(s) from QRZ.").arg(body.size()));
+    emit logMessage(tr("Raw response prefix: %1").arg(body.left(400).trimmed()));
 
     // The QRZ response is nominally URL-encoded, but the DATA field contains raw
     // ADIF which itself has '&' and '=' characters — QUrlQuery mangles it.
