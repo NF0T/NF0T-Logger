@@ -17,6 +17,36 @@
 #include "app/settings/Settings.h"
 #include "qsl/QslService.h"
 
+// ---------------------------------------------------------------------------
+// Mode normalisation
+//
+// Some services (eQSL) follow the ADIF spec strictly and return FT4 as
+// MODE=MFSK / SUBMODE=FT4.  Our entry panel stores FT4 as MODE=FT4 (a
+// common logger convention).  Normalise both to a canonical pair so the
+// matching logic handles either representation.
+// ---------------------------------------------------------------------------
+static QPair<QString,QString> normaliseMode(const QString &mode, const QString &submode)
+{
+    const QString m = mode.toUpper();
+    const QString s = submode.toUpper();
+
+    // ADIF spec: FT4 is MFSK / FT4 — accept either spelling
+    if (m == QLatin1String("FT4"))                                return {"MFSK", "FT4"};
+    if (m == QLatin1String("MFSK") && s == QLatin1String("FT4")) return {"MFSK", "FT4"};
+
+    // FST4 / FST4W live under MFSK too
+    if (m == QLatin1String("FST4"))                                return {"MFSK", "FST4"};
+    if (m == QLatin1String("MFSK") && s == QLatin1String("FST4")) return {"MFSK", "FST4"};
+    if (m == QLatin1String("FST4W"))                               return {"MFSK", "FST4W"};
+    if (m == QLatin1String("MFSK") && s == QLatin1String("FST4W"))return {"MFSK", "FST4W"};
+
+    // JS8 / JS8Call
+    if (m == QLatin1String("JS8") || (m == QLatin1String("MFSK") && s == QLatin1String("JS8")))
+        return {"MFSK", "JS8"};
+
+    return {m, s};
+}
+
 QslDownloadDialog::QslDownloadDialog(const QList<QslService*> &services,
                                        const QList<Qso>         &localQsos,
                                        QWidget                  *parent)
@@ -177,17 +207,19 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
         int cntNew = 0, cntAlready = 0, cntNotFound = 0;
 
         for (const Qso &conf : confirmed) {
+            const auto [confMode, confSub] = normaliseMode(conf.mode, conf.submode);
             const QString key = QStringLiteral("%1  %2  %3  %4")
                                     .arg(conf.callsign,
                                          conf.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
-                                         conf.band, conf.mode);
+                                         conf.band, confMode + (confSub.isEmpty() ? QString() : QStringLiteral("/") + confSub));
 
             bool found = false;
             for (Qso local : m_localQsos) {
                 if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
                 if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
-                if (local.mode.compare(conf.mode, Qt::CaseInsensitive) != 0) continue;
                 if (local.datetimeOn.toUTC().date() != conf.datetimeOn.toUTC().date()) continue;
+                const auto [localMode, localSub] = normaliseMode(local.mode, local.submode);
+                if (localMode != confMode || localSub != confSub) continue;
 
                 found = true;
 
