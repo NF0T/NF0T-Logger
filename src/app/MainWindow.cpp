@@ -165,6 +165,7 @@ MainWindow::MainWindow(QWidget *parent)
             this, [this](const Qso &qso) {
         if (!Settings::instance().wsjtxAutoLog()) return;
         onQsoReady(qso);
+        m_entryPanel->clearForm();
     });
 
     connect(m_wsjtxService, &WsjtxService::heartbeat,

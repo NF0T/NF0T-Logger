@@ -254,6 +254,31 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
                     if (conf.lotwQslRcvd == 'Y') { local.lotwQslRcvd = 'Y'; local.lotwRcvdDate = conf.lotwRcvdDate; }
                     if (conf.eqslQslRcvd == 'Y') { local.eqslQslRcvd = 'Y'; local.eqslRcvdDate = conf.eqslRcvdDate; }
                     if (conf.qrzQslRcvd  == 'Y') { local.qrzQslRcvd  = 'Y'; local.qrzRcvdDate  = conf.qrzRcvdDate; }
+
+                    // Backfill blank contacted-station fields from the confirmation ADIF.
+                    // Only write fields that are empty/unknown in the local record.
+                    auto fillStr = [](QString &dst, const QString &src) {
+                        if (dst.isEmpty() && !src.isEmpty()) dst = src;
+                    };
+                    auto fillInt = [](int &dst, int src) {
+                        if (dst == 0 && src != 0) dst = src;
+                    };
+                    fillStr(local.name,       conf.name);
+                    fillStr(local.qth,        conf.qth);
+                    fillStr(local.gridsquare, conf.gridsquare);
+                    fillStr(local.country,    conf.country);
+                    fillStr(local.state,      conf.state);
+                    fillStr(local.county,     conf.county);
+                    fillStr(local.cont,       conf.cont);
+                    fillStr(local.pfx,        conf.pfx);
+                    fillStr(local.arrlSect,   conf.arrlSect);
+                    fillInt(local.dxcc,       conf.dxcc);
+                    fillInt(local.cqZone,     conf.cqZone);
+                    fillInt(local.ituZone,    conf.ituZone);
+                    if (!local.lat.has_value()      && conf.lat.has_value())      local.lat      = conf.lat;
+                    if (!local.lon.has_value()      && conf.lon.has_value())      local.lon      = conf.lon;
+                    if (!local.distance.has_value() && conf.distance.has_value()) local.distance = conf.distance;
+
                     appendLog(tr("  %1 — new confirmation").arg(key));
                     matched.append(local);
                     ++cntNew;
