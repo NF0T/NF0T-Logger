@@ -341,7 +341,9 @@ QDateTime WsjtxService::readDateTime(QDataStream &ds)
     ds >> julianDay >> msOfDay >> timeSpec;
 
     QDate date = QDate::fromJulianDay(static_cast<qint64>(julianDay));
-    QTime time = QTime::fromMSecsSinceStartOfDay(static_cast<int>(msOfDay));
+    // msOfDay from an untrusted datagram; clamp to valid range before conversion
+    const int ms = static_cast<int>(qMin(msOfDay, quint32(86'400'000 - 1)));
+    QTime time = QTime::fromMSecsSinceStartOfDay(ms);
     QDateTime dt(date, time, QTimeZone::utc());
     return dt;
 }
