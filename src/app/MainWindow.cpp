@@ -361,6 +361,10 @@ void MainWindow::setupCentralWidget()
     m_entryPanel = new QsoEntryPanel(m_splitter);
     connect(m_entryPanel, &QsoEntryPanel::qsoReady, this, &MainWindow::onQsoReady);
 
+    // Escape anywhere in the main window resets the entry panel
+    auto *escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(escShortcut, &QShortcut::activated, m_entryPanel, &QsoEntryPanel::clearForm);
+
     m_splitter->addWidget(m_logView);
     m_splitter->addWidget(m_entryPanel);
     m_splitter->setStretchFactor(0, 3);

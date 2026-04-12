@@ -248,9 +248,6 @@ QsoEntryPanel::QsoEntryPanel(QWidget *parent)
     setTabOrder(m_grid, m_comment);
     setTabOrder(m_comment, m_logBtn);
 
-    // Escape clears the form
-    new QShortcut(QKeySequence(Qt::Key_Escape), this, this, &QsoEntryPanel::clearForm);
-
     // Initialise to a clean state
     clearForm();
     // Trigger initial submode population
