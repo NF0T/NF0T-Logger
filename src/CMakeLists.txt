@@ -75,6 +75,12 @@ qt_add_executable(NF0T-Logger
     ${HEADERS}
 )
 
+qt_add_resources(NF0T-Logger "app_resources"
+    PREFIX "/"
+    FILES
+        resources/icons/nf0t-logger.svg
+)
+
 target_include_directories(NF0T-Logger PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )

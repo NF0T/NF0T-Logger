@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QHeaderView>
+#include <QIcon>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -46,6 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("NF0T Logger");
+    setWindowIcon(QIcon(QStringLiteral(":/resources/icons/nf0t-logger.svg")));
     setMinimumSize(900, 600);
     resize(1200, 750);
 
@@ -294,6 +296,15 @@ void MainWindow::setupToolBar()
     QToolBar *toolBar = addToolBar(tr("Main Toolbar"));
     toolBar->setObjectName(QStringLiteral("mainToolBar"));
     toolBar->setMovable(false);
+
+    // Application logo on the left of the toolbar
+    auto *logoLabel = new QLabel(toolBar);
+    const QIcon appIcon(QStringLiteral(":/resources/icons/nf0t-logger.svg"));
+    logoLabel->setPixmap(appIcon.pixmap(32, 32));
+    logoLabel->setContentsMargins(4, 0, 8, 0);
+    toolBar->addWidget(logoLabel);
+    toolBar->addSeparator();
+
     toolBar->addAction(m_newLogAction);
     toolBar->addSeparator();
     toolBar->addAction(m_importAdifAction);
