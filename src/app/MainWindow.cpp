@@ -156,17 +156,34 @@ MainWindow::MainWindow(QWidget *parent)
             if (!s.mode.isEmpty())
                 m_entryPanel->setRadioMode(s.mode, s.submode);
         }
-        // Always pre-populate DX call / grid (only if field is empty)
-        if (!s.dxCall.isEmpty())
-            m_entryPanel->setDxCall(s.dxCall);
-        if (!s.dxGrid.isEmpty())
-            m_entryPanel->setDxGrid(s.dxGrid);
+
+        // Update DX call/grid whenever WSJT-X reports a change so the entry
+        // panel always tracks the currently selected station.  We compare
+        // against the last known values to avoid clobbering the field while
+        // the operator is typing (Status fires ~1 Hz even with no change).
+        if (s.dxCall != m_wsjtxLastDxCall) {
+            m_wsjtxLastDxCall = s.dxCall;
+            if (s.dxCall.isEmpty())
+                m_entryPanel->clearForm();  // station deselected → reset panel
+            else
+                m_entryPanel->setDxCall(s.dxCall);
+        }
+        if (s.dxGrid != m_wsjtxLastDxGrid) {
+            m_wsjtxLastDxGrid = s.dxGrid;
+            if (!s.dxGrid.isEmpty())
+                m_entryPanel->setDxGrid(s.dxGrid);
+        }
     });
+
+    connect(m_wsjtxService, &WsjtxService::cleared,
+            m_entryPanel, &QsoEntryPanel::clearForm);
 
     connect(m_wsjtxService, &WsjtxService::qsoLogged,
             this, [this](const Qso &qso) {
         if (!Settings::instance().wsjtxAutoLog()) return;
         onQsoReady(qso);
+        m_wsjtxLastDxCall.clear();
+        m_wsjtxLastDxGrid.clear();
         m_entryPanel->clearForm();
     });
 

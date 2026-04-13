@@ -19,6 +19,7 @@ class QUdpSocket;
 /// Handled message types:
 ///   0 — Heartbeat     → heartbeat()
 ///   1 — Status        → statusReceived()
+///   3 — Clear         → cleared()
 ///   5 — QSOLogged     → qsoLogged()
 ///  12 — LoggedADIF    → qsoLogged() (via ADIF parser)
 ///
@@ -66,6 +67,8 @@ public:
 signals:
     void heartbeat(const QString &clientId, const QString &version, int maxSchema);
     void statusReceived(const WsjtxService::Status &status);
+    /// Emitted when WSJT-X sends a Clear message (QSO cancelled / log wiped).
+    void cleared();
     void qsoLogged(const Qso &qso);
     void logMessage(const QString &msg);
 
@@ -76,6 +79,7 @@ private:
     void processPacket(const QByteArray &data);
     void handleHeartbeat (QDataStream &ds, const QString &clientId);
     void handleStatus    (QDataStream &ds, const QString &clientId);
+    void handleClear     (QDataStream &ds, const QString &clientId);
     void handleQsoLogged (QDataStream &ds, const QString &clientId);
     void handleLoggedAdif(QDataStream &ds, const QString &clientId);
 

@@ -80,6 +80,9 @@ private:
 
     // WSJT-X listener
     WsjtxService   *m_wsjtxService   = nullptr;
+    // Last DX call/grid reported by WSJT-X — used to detect station changes
+    QString         m_wsjtxLastDxCall;
+    QString         m_wsjtxLastDxGrid;
 
     // Central layout
     QSplitter     *m_splitter   = nullptr;

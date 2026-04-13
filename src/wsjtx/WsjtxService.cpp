@@ -134,9 +134,10 @@ void WsjtxService::processPacket(const QByteArray &data)
     switch (msgType) {
     case 0:  handleHeartbeat (ds, clientId); break;
     case 1:  handleStatus    (ds, clientId); break;
+    case 3:  handleClear     (ds, clientId); break;
     case 5:  handleQsoLogged (ds, clientId); break;
     case 12: handleLoggedAdif(ds, clientId); break;
-    default: break;   // ignore Decode, Clear, Reply, etc.
+    default: break;   // ignore Decode, Reply, etc.
     }
 }
 
@@ -208,6 +209,16 @@ void WsjtxService::handleStatus(QDataStream &ds, const QString &clientId)
     s.txMessage  = readString(ds);
 
     emit statusReceived(s);
+}
+
+void WsjtxService::handleClear(QDataStream &ds, const QString &clientId)
+{
+    Q_UNUSED(clientId)
+    // Schema 3+ adds an optional Window byte (0=BandActivity, 1=RxFreq, 2=Both).
+    // We emit cleared() regardless of which window — any Clear means the active
+    // QSO has been abandoned in WSJT-X.
+    Q_UNUSED(ds)
+    emit cleared();
 }
 
 void WsjtxService::handleQsoLogged(QDataStream &ds, const QString &clientId)
