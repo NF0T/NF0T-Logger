@@ -21,6 +21,7 @@ class LoTwService;
 class QrzService;
 class QslService;
 class QsoEntryPanel;
+class RadioPanel;
 class QsoTableModel;
 class RadioBackend;
 class TciBackend;
@@ -99,6 +100,7 @@ private:
     QList<DigitalListenerService*> m_digitalListeners;
 
     // Central layout
+    RadioPanel    *m_radioPanel = nullptr;
     QSplitter     *m_splitter   = nullptr;
     QTableView    *m_logView    = nullptr;
     QsoEntryPanel *m_entryPanel = nullptr;

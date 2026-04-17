@@ -33,6 +33,7 @@ public slots:
 signals:
     void freqChanged(double freqMhz);
     void modeChanged(const QString &mode, const QString &submode);
+    void transmitChanged(bool transmitting);
     void connected();
     void disconnected();
     void error(const QString &message);

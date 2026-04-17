@@ -12,6 +12,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
+#include <QVBoxLayout>
 #include <QWidget>
 
 #include <QCloseEvent>
@@ -43,6 +44,7 @@
 #include "radio/HamlibBackend.h"
 #include "radio/RadioBackend.h"
 #include "radio/TciBackend.h"
+#include "ui/RadioPanel.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 #include "ui/QsoEditDialog.h"
 #include "ui/QslColumns.h"
@@ -225,6 +227,8 @@ void MainWindow::setupMenuBar()
 
 void MainWindow::setupCentralWidget()
 {
+    m_radioPanel = new RadioPanel(this);
+
     m_splitter = new QSplitter(Qt::Vertical, this);
 
     // Log table (top pane)
@@ -293,7 +297,13 @@ void MainWindow::setupCentralWidget()
     m_splitter->setStretchFactor(0, 3);
     m_splitter->setStretchFactor(1, 1);
 
-    setCentralWidget(m_splitter);
+    auto *container = new QWidget(this);
+    auto *vbox = new QVBoxLayout(container);
+    vbox->setContentsMargins(0, 0, 0, 0);
+    vbox->setSpacing(0);
+    vbox->addWidget(m_radioPanel);
+    vbox->addWidget(m_splitter);
+    setCentralWidget(container);
 }
 
 static const char *kIndicatorIdle  =
@@ -598,11 +608,16 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
 
     connect(backend, &RadioBackend::freqChanged,
             m_entryPanel, &QsoEntryPanel::setRadioFreq);
+    connect(backend, &RadioBackend::freqChanged,
+            m_radioPanel, &RadioPanel::setFrequency);
     connect(backend, &RadioBackend::modeChanged,
             m_entryPanel, &QsoEntryPanel::setRadioMode);
+    connect(backend, &RadioBackend::transmitChanged,
+            m_radioPanel, &RadioPanel::setTransmitting);
 
     connect(backend, &RadioBackend::connected, this, [this, backend, indicator]() {
         setIndicatorState(indicator, IndicatorState::Connected);
+        m_radioPanel->setConnected(true);
         for (QAction *act : m_radioConnectActions)
             act->setEnabled(false);
         m_disconnectRadioAction->setEnabled(true);
@@ -613,6 +628,7 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
     connect(backend, &RadioBackend::disconnected, this, [this, indicator]() {
         setIndicatorState(indicator, IndicatorState::Idle);
         if (!anyRadioConnected()) {
+            m_radioPanel->setConnected(false);
             for (QAction *act : m_radioConnectActions)
                 act->setEnabled(true);
             m_disconnectRadioAction->setEnabled(false);
@@ -641,8 +657,11 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
     connect(svc, &DigitalListenerService::radioStatusChanged,
             this, [this](quint64 dialFreqHz, const QString &mode, const QString &submode) {
         if (anyRadioConnected()) return;
-        if (dialFreqHz > 0)
-            m_entryPanel->setRadioFreq(static_cast<double>(dialFreqHz) / 1e6);
+        if (dialFreqHz > 0) {
+            const double mhz = static_cast<double>(dialFreqHz) / 1e6;
+            m_entryPanel->setRadioFreq(mhz);
+            m_radioPanel->setFrequency(mhz);
+        }
         if (!mode.isEmpty())
             m_entryPanel->setRadioMode(mode, submode);
     });

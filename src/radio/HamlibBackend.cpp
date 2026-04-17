@@ -137,6 +137,7 @@ void HamlibBackend::poll()
     if (!m_connected || !m_rig) return;
     readFreq();
     readMode();
+    readPtt();
 #endif
 }
 
@@ -218,6 +219,18 @@ void HamlibBackend::readMode()
         QString submode;
         const QString adif = rigModeToAdif(mode, submode);
         emit modeChanged(adif, submode);
+    }
+}
+
+void HamlibBackend::readPtt()
+{
+    ptt_t ptt = RIG_PTT_OFF;
+    if (rig_get_ptt(m_rig, RIG_VFO_CURR, &ptt) != RIG_OK)
+        return;
+    const bool tx = (ptt != RIG_PTT_OFF);
+    if (tx != m_lastPtt) {
+        m_lastPtt = tx;
+        emit transmitChanged(tx);
     }
 }
 

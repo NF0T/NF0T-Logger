@@ -16,6 +16,7 @@ set(SOURCES
     core/adif/AdifWriter.cpp
     core/BandPlan.cpp
     core/Maidenhead.cpp
+    ui/RadioPanel.cpp
     ui/entrypanel/QsoEntryPanel.cpp
     ui/QsoEditDialog.cpp
     ui/QslColumns.cpp
@@ -53,6 +54,7 @@ set(HEADERS
     core/adif/AdifWriter.h
     core/BandPlan.h
     core/Maidenhead.h
+    ui/RadioPanel.h
     ui/entrypanel/QsoEntryPanel.h
     ui/QsoEditDialog.h
     ui/QslColumns.h

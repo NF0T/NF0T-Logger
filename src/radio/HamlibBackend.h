@@ -45,8 +45,11 @@ private:
     static QString rigModeToAdif(rmode_t mode, QString &submode);
     static rmode_t adifToRigMode(const QString &adifMode, const QString &submode);
 
+    void readPtt();
+
     RIG    *m_rig        = nullptr;
     rmode_t m_lastMode   = RIG_MODE_NONE;
+    bool    m_lastPtt    = false;
 #endif
 
     QTimer *m_pollTimer  = nullptr;

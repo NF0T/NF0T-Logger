@@ -51,6 +51,7 @@ private:
     bool    m_connected        = false;
     bool    m_intentionalClose = false;
     bool    m_serverReady      = false;
+    bool    m_transmitting     = false;
     double  m_lastFreqHz       = 0.0;
     QString m_lastTciMode;
 };

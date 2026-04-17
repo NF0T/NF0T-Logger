@@ -162,6 +162,19 @@ void TciBackend::parseMessage(const QString &msg)
         return;
     }
 
+    if (name == QLatin1String("trx")) {
+        // trx:{trx},{true|false}
+        const QStringList parts = params.split(QLatin1Char(','));
+        if (parts.size() < 2) return;
+        if (parts[0].toInt() != 0) return;
+        const bool tx = (parts[1].trimmed().toLower() == QLatin1String("true"));
+        if (tx != m_transmitting) {
+            m_transmitting = tx;
+            emit transmitChanged(tx);
+        }
+        return;
+    }
+
     if (name == QLatin1String("modulation")) {
         // modulation:{trx},{mode}
         const QStringList parts = params.split(QLatin1Char(','));
