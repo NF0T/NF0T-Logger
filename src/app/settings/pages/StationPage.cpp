@@ -1,5 +1,6 @@
 #include "StationPage.h"
 #include "app/settings/Settings.h"
+#include "core/Maidenhead.h"
 
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -20,6 +21,14 @@ StationPage::StationPage(QWidget *parent)
     m_grid     = new QLineEdit(this);
     m_grid->setPlaceholderText(tr("e.g. EM38"));
     m_grid->setMaxLength(10);
+    connect(m_grid, &QLineEdit::editingFinished, this, [this]() {
+        const QString g = m_grid->text().trimmed().toUpper();
+        double lat, lon;
+        if (Maidenhead::toLatLon(g, lat, lon)) {
+            m_lat->setValue(lat);
+            m_lon->setValue(lon);
+        }
+    });
 
     m_city     = new QLineEdit(this);
     m_state    = new QLineEdit(this);

@@ -35,7 +35,7 @@ public:
 private slots:
     void onHamlibConnTypeChanged(int index);
     void onRigFilterChanged(const QString &text);
-    void onShowAllStatusChanged(int state);
+    void onShowAllStatusChanged(Qt::CheckState state);
     void onRigSelected(int index);
 
 private:

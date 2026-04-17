@@ -31,6 +31,7 @@
 #include "core/adif/AdifParser.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
+#include "core/Maidenhead.h"
 #include "database/MariaDbBackend.h"
 #include "database/SqliteBackend.h"
 #include "qsl/ClubLogService.h"
@@ -420,6 +421,36 @@ void MainWindow::onNewLog()
     QMessageBox::information(this, tr("New Log"), tr("New log functionality coming soon."));
 }
 
+// Derive missing lat/lon from gridsquare and compute distance from my station.
+static void enrichQso(Qso &qso)
+{
+    // Derive DX lat/lon from grid square if not explicitly provided
+    if (!qso.gridsquare.isEmpty() && !qso.lat.has_value()) {
+        double lat, lon;
+        if (Maidenhead::toLatLon(qso.gridsquare, lat, lon)) {
+            qso.lat = lat;
+            qso.lon = lon;
+        }
+    }
+
+    if (qso.distance.has_value()) return;
+
+    // Need a DX position to measure from
+    if (!qso.lat.has_value()) return;
+
+    // Prefer my grid square for my position; fall back to stored lat/lon
+    const QString myGrid = Settings::instance().stationGridsquare();
+    if (!myGrid.isEmpty()) {
+        if (auto d = Maidenhead::distanceKm(myGrid, *qso.lat, *qso.lon))
+            qso.distance = *d;
+    } else {
+        const auto mLat = Settings::instance().stationLat();
+        const auto mLon = Settings::instance().stationLon();
+        if (mLat.has_value() && mLon.has_value())
+            qso.distance = Maidenhead::distanceKm(*mLat, *mLon, *qso.lat, *qso.lon);
+    }
+}
+
 void MainWindow::onImportAdif()
 {
     if (!m_db) return;
@@ -446,6 +477,7 @@ void MainWindow::onImportAdif()
         progress.setValue(i);
 
         Qso qso = parsed.qsos.at(i);
+        enrichQso(qso);
         if (auto r = m_db->insertQso(qso); !r) {
             const QString &err = r.error();
             // Unique constraint violations are expected for duplicates
@@ -702,6 +734,7 @@ void MainWindow::onQsoReady(const Qso &qso)
     if (!m_db) return;
 
     Qso inserted = qso;
+    enrichQso(inserted);
     if (auto r = m_db->insertQso(inserted); !r) {
         showStatusMessage(
             tr("Failed to log contact: %1").arg(r.error()), 5000);

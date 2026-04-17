@@ -81,7 +81,7 @@ RadioPage::RadioPage(QWidget *parent)
 
     connect(m_rigFilter,     &QLineEdit::textChanged,
             this,            &RadioPage::onRigFilterChanged);
-    connect(m_showAllStatus, &QCheckBox::stateChanged,
+    connect(m_showAllStatus, &QCheckBox::checkStateChanged,
             this,            &RadioPage::onShowAllStatusChanged);
     connect(m_rigCombo,      QOverload<int>::of(&QComboBox::currentIndexChanged),
             this,            &RadioPage::onRigSelected);
@@ -260,7 +260,7 @@ void RadioPage::onRigFilterChanged(const QString &)
     populateRigCombo();
 }
 
-void RadioPage::onShowAllStatusChanged(int)
+void RadioPage::onShowAllStatusChanged(Qt::CheckState)
 {
     populateRigCombo();
 }
