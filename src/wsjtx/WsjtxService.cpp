@@ -40,7 +40,10 @@ bool WsjtxService::isRunning() const
 bool WsjtxService::start()
 {
     const Settings &s = Settings::instance();
-    return startOnAddress(s.wsjtxPort(), s.wsjtxUdpAddress());
+    if (!startOnAddress(s.wsjtxPort(), s.wsjtxUdpAddress()))
+        return false;
+    emit started();
+    return true;
 }
 
 void WsjtxService::stop()
@@ -53,6 +56,7 @@ void WsjtxService::stop()
     m_socket->close();
     m_socket->deleteLater();
     m_socket = nullptr;
+    emit stopped();
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +164,7 @@ void WsjtxService::handleHeartbeat(QDataStream &ds, const QString &clientId)
     const QString version  = readString(ds);
     const QString revision = readString(ds);
     Q_UNUSED(revision)
-    emit logMessage(tr("WSJT-X heartbeat: %1 v%2").arg(clientId, version));
+    Q_UNUSED(clientId)
 }
 
 void WsjtxService::handleStatus(QDataStream &ds, const QString &clientId)

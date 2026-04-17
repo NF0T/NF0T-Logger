@@ -53,4 +53,10 @@ signals:
 
     /// Human-readable status / log line (heartbeat, errors, etc.).
     void logMessage(const QString &msg);
+
+    /// Lifecycle — emitted after the socket/connection is established.
+    void started();
+
+    /// Lifecycle — emitted after the socket/connection is torn down.
+    void stopped();
 };

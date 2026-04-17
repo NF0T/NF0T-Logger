@@ -59,7 +59,6 @@ private:
     void applyUploadedQsos           (const QList<Qso> &updated,   const QStringList &errors);
 
     void setupMenuBar();
-    void setupToolBar();
     void setupCentralWidget();
     void setupStatusBar();
 
@@ -104,9 +103,16 @@ private:
     QTableView    *m_logView    = nullptr;
     QsoEntryPanel *m_entryPanel = nullptr;
 
-    // Status bar labels
-    QLabel *m_radioStatusLabel = nullptr;
+    // Status bar
+    QLabel *m_hamlibIndicator  = nullptr;
+    QLabel *m_tciIndicator     = nullptr;
+    QLabel *m_wsjtxIndicator   = nullptr;
+    QLabel *m_statusMsgLabel   = nullptr;
     QLabel *m_qsoCountLabel    = nullptr;
+
+    enum class IndicatorState { Idle, Connected, Fault };
+    static void setIndicatorState(QLabel *indicator, IndicatorState state);
+    void showStatusMessage(const QString &msg, int ms = 0);
 
     // Actions
     QAction *m_newLogAction          = nullptr;
