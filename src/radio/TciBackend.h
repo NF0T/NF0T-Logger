@@ -1,8 +1,8 @@
 #pragma once
 
 #include <QAbstractSocket>
-#include <QObject>
-#include <QString>
+
+#include "RadioBackend.h"
 
 class QTimer;
 class QWebSocket;
@@ -13,10 +13,8 @@ class QWebSocket;
 /// TCI is a text-based protocol — each command is a semicolon-terminated
 /// ASCII string, e.g. "vfo:0,0,14074000;" or "modulation:0,USB;".
 ///
-/// The backend tracks TRX 0 / VFO A only. It emits freqChanged() and
-/// modeChanged() signals consumed by QsoEntryPanel, mirroring the same
-/// interface as HamlibBackend so MainWindow can treat them uniformly.
-class TciBackend : public QObject
+/// The backend tracks TRX 0 / VFO A only.
+class TciBackend : public RadioBackend
 {
     Q_OBJECT
 
@@ -24,23 +22,14 @@ public:
     explicit TciBackend(QObject *parent = nullptr);
     ~TciBackend() override;
 
-    bool connectTci();
-    void disconnectTci();
-    bool isConnected() const;
+    QString displayName() const override { return QStringLiteral("TCI"); }
+    bool    isConnected()  const override;
+    bool    connectRadio()       override;
+    void    disconnectRadio()    override;
 
 public slots:
-    /// Push a new frequency (MHz) to TRX 0 / VFO A.
-    void setFreq(double freqMhz);
-
-    /// Push a new mode to TRX 0 (ADIF mode + optional submode string).
-    void setMode(const QString &adifMode, const QString &submode = {});
-
-signals:
-    void freqChanged(double freqMhz);
-    void modeChanged(const QString &mode, const QString &submode);
-    void connected();
-    void disconnected();
-    void error(const QString &message);
+    void setFreq(double freqMhz) override;
+    void setMode(const QString &adifMode, const QString &submode = {}) override;
 
 private slots:
     void onConnected();
@@ -56,12 +45,12 @@ private:
     static QString tciModeToAdif(const QString &tciMode, QString &submode);
     static QString adifToTciMode(const QString &adifMode, const QString &submode);
 
-    QWebSocket *m_socket        = nullptr;
+    QWebSocket *m_socket         = nullptr;
     QTimer     *m_reconnectTimer = nullptr;
 
-    bool    m_connected          = false;
-    bool    m_intentionalClose   = false;
-    bool    m_serverReady        = false;
-    double  m_lastFreqHz         = 0.0;
+    bool    m_connected        = false;
+    bool    m_intentionalClose = false;
+    bool    m_serverReady      = false;
+    double  m_lastFreqHz       = 0.0;
     QString m_lastTciMode;
 };

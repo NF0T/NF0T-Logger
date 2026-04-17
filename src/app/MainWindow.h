@@ -14,12 +14,15 @@ class QTableView;
 
 class ClubLogService;
 class DatabaseInterface;
+class DigitalListenerService;
 class EqslService;
 class HamlibBackend;
 class LoTwService;
 class QrzService;
+class QslService;
 class QsoEntryPanel;
 class QsoTableModel;
+class RadioBackend;
 class TciBackend;
 class WsjtxService;
 
@@ -64,25 +67,37 @@ private:
     void reloadLog();
     void updateQsoCount();
 
+    // Wire a radio backend's signals to the entry panel and status bar.
+    // Call once per backend after construction.
+    void wireRadioBackend(RadioBackend *backend);
+
+    // Wire a digital listener's signals to the entry panel and auto-log logic.
+    void wireDigitalListener(DigitalListenerService *svc);
+
+    // Returns true if any radio backend is currently connected.
+    bool anyRadioConnected() const;
+
     // Database + model
     std::unique_ptr<DatabaseInterface> m_db;
     QsoTableModel *m_logModel = nullptr;
 
-    // Radio backends
-    HamlibBackend *m_hamlibBackend = nullptr;
-    TciBackend    *m_tciBackend    = nullptr;
+    // Radio backends — typed members for menu-action slots; generic list for
+    // shared wiring and disconnect-all.
+    HamlibBackend          *m_hamlibBackend  = nullptr;
+    TciBackend             *m_tciBackend     = nullptr;
+    QList<RadioBackend*>    m_radioBackends;
+    QList<QAction*>         m_radioConnectActions;  // all "Connect X" actions
 
-    // QSL services
+    // QSL services — single registration list consumed by both dialogs
     LoTwService    *m_lotwService    = nullptr;
     EqslService    *m_eqslService    = nullptr;
     QrzService     *m_qrzService     = nullptr;
     ClubLogService *m_clublogService = nullptr;
+    QList<QslService*> m_qslServices;
 
-    // WSJT-X listener
-    WsjtxService   *m_wsjtxService   = nullptr;
-    // Last DX call/grid reported by WSJT-X — used to detect station changes
-    QString         m_wsjtxLastDxCall;
-    QString         m_wsjtxLastDxGrid;
+    // Digital listeners
+    WsjtxService              *m_wsjtxService = nullptr;
+    QList<DigitalListenerService*> m_digitalListeners;
 
     // Central layout
     QSplitter     *m_splitter   = nullptr;
