@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 HamlibBackend::HamlibBackend(QObject *parent)
-    : QObject(parent)
+    : RadioBackend(parent)
 {
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(500);
@@ -18,21 +18,21 @@ HamlibBackend::HamlibBackend(QObject *parent)
 
 HamlibBackend::~HamlibBackend()
 {
-    disconnectRig();
+    disconnectRadio();
 }
 
 // ---------------------------------------------------------------------------
 // Connect / disconnect
 // ---------------------------------------------------------------------------
 
-bool HamlibBackend::connectRig()
+bool HamlibBackend::connectRadio()
 {
 #ifndef HAVE_HAMLIB
     emit error(tr("Hamlib support was not compiled in."));
     return false;
 #else
     if (m_connected)
-        disconnectRig();
+        disconnectRadio();
 
     const Settings &s = Settings::instance();
     const int model   = s.hamlibRigModel();
@@ -77,7 +77,7 @@ bool HamlibBackend::connectRig()
 #endif
 }
 
-void HamlibBackend::disconnectRig()
+void HamlibBackend::disconnectRadio()
 {
 #ifdef HAVE_HAMLIB
     m_pollTimer->stop();

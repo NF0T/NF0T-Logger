@@ -12,7 +12,6 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
-#include <QToolBar>
 #include <QWidget>
 
 #include <QCloseEvent>
@@ -22,6 +21,8 @@
 #include <QMenu>
 #include <QProgressDialog>
 #include <QShortcut>
+#include <QSizePolicy>
+#include <QTimer>
 
 #include "app/settings/SecureSettings.h"
 #include "app/settings/Settings.h"
@@ -30,12 +31,16 @@
 #include "core/adif/AdifParser.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
+#include "database/MariaDbBackend.h"
 #include "database/SqliteBackend.h"
 #include "qsl/ClubLogService.h"
 #include "qsl/EqslService.h"
 #include "qsl/LoTwService.h"
 #include "qsl/QrzService.h"
+#include "qsl/QslService.h"
+#include "radio/DigitalListenerService.h"
 #include "radio/HamlibBackend.h"
+#include "radio/RadioBackend.h"
 #include "radio/TciBackend.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 #include "ui/QsoEditDialog.h"
@@ -52,7 +57,6 @@ MainWindow::MainWindow(QWidget *parent)
     resize(1200, 750);
 
     setupMenuBar();
-    setupToolBar();
     setupCentralWidget();
     setupStatusBar();
 
@@ -64,11 +68,11 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Show credential-load status; enable QSL/radio menus once loaded
     connect(&SecureSettings::instance(), &SecureSettings::loaded, this, [this]() {
-        statusBar()->showMessage(tr("Credentials loaded."), 2000);
+        showStatusMessage(tr("Credentials loaded."), 2000);
     });
     connect(&SecureSettings::instance(), &SecureSettings::error, this,
             [this](const QString &key, const QString &msg) {
-        statusBar()->showMessage(tr("Keychain error (%1): %2").arg(key, msg), 5000);
+        showStatusMessage(tr("Keychain error (%1): %2").arg(key, msg), 5000);
     });
 
     // First-run: require station callsign before opening the log
@@ -81,130 +85,44 @@ MainWindow::MainWindow(QWidget *parent)
 
     openDefaultDatabase();
 
-    // Create the Hamlib backend (does not connect — user initiates via menu)
+    // Radio backends — wire generically, then auto-connect if configured
     m_hamlibBackend = new HamlibBackend(this);
-    connect(m_hamlibBackend, &HamlibBackend::freqChanged,
-            m_entryPanel,    &QsoEntryPanel::setRadioFreq);
-    connect(m_hamlibBackend, &HamlibBackend::modeChanged,
-            m_entryPanel,    &QsoEntryPanel::setRadioMode);
-    connect(m_hamlibBackend, &HamlibBackend::connected, this, [this]() {
-        m_radioStatusLabel->setText(tr("Radio: Connected (Hamlib)"));
-        m_connectHamlibAction->setEnabled(false);
-        m_disconnectRadioAction->setEnabled(true);
-        statusBar()->showMessage(tr("Hamlib connected."), 3000);
-    });
-    connect(m_hamlibBackend, &HamlibBackend::disconnected, this, [this]() {
-        m_radioStatusLabel->setText(tr("Radio: Not connected"));
-        m_connectHamlibAction->setEnabled(true);
-        m_disconnectRadioAction->setEnabled(false);
-        statusBar()->showMessage(tr("Radio disconnected."), 3000);
-    });
-    connect(m_hamlibBackend, &HamlibBackend::error, this, [this](const QString &msg) {
-        statusBar()->showMessage(tr("Radio error: %1").arg(msg), 6000);
-    });
+    m_tciBackend    = new TciBackend(this);
+    m_radioBackends       = {m_hamlibBackend, m_tciBackend};
+    m_radioConnectActions = {m_connectHamlibAction, m_connectTciAction};
 
-    // Auto-connect on startup if Hamlib was previously enabled
+    for (RadioBackend *b : m_radioBackends)
+        wireRadioBackend(b);
+
     if (Settings::instance().hamlibEnabled())
-        m_hamlibBackend->connectRig();
-
-    // TCI backend
-    m_tciBackend = new TciBackend(this);
-    connect(m_tciBackend, &TciBackend::freqChanged,
-            m_entryPanel, &QsoEntryPanel::setRadioFreq);
-    connect(m_tciBackend, &TciBackend::modeChanged,
-            m_entryPanel, &QsoEntryPanel::setRadioMode);
-    connect(m_tciBackend, &TciBackend::connected, this, [this]() {
-        m_radioStatusLabel->setText(tr("Radio: Connected (TCI)"));
-        m_connectTciAction->setEnabled(false);
-        m_connectHamlibAction->setEnabled(false);
-        m_disconnectRadioAction->setEnabled(true);
-        statusBar()->showMessage(tr("TCI connected."), 3000);
-    });
-    connect(m_tciBackend, &TciBackend::disconnected, this, [this]() {
-        m_radioStatusLabel->setText(tr("Radio: Not connected"));
-        m_connectTciAction->setEnabled(true);
-        m_connectHamlibAction->setEnabled(true);
-        m_disconnectRadioAction->setEnabled(false);
-        statusBar()->showMessage(tr("TCI disconnected."), 3000);
-    });
-    connect(m_tciBackend, &TciBackend::error, this, [this](const QString &msg) {
-        statusBar()->showMessage(tr("TCI error: %1").arg(msg), 6000);
-    });
-
-    // Auto-connect on startup if TCI was previously enabled
+        m_hamlibBackend->connectRadio();
     if (Settings::instance().tciEnabled())
-        m_tciBackend->connectTci();
+        m_tciBackend->connectRadio();
 
-    // QSL services — owned here; dialogs borrow pointers at open time
+    // QSL services — single list used by both dialogs
     m_lotwService    = new LoTwService(this);
     m_eqslService    = new EqslService(this);
     m_qrzService     = new QrzService(this);
     m_clublogService = new ClubLogService(this);
+    m_qslServices    = {m_lotwService, m_eqslService, m_qrzService};
 
-    // WSJT-X listener
-    m_wsjtxService = new WsjtxService(this);
+    // Digital listeners
+    m_wsjtxService     = new WsjtxService(this);
+    m_digitalListeners = {m_wsjtxService};
 
-    connect(m_wsjtxService, &WsjtxService::statusReceived,
-            this, [this](const WsjtxService::Status &s) {
-        // Only update freq/mode from WSJT-X when no hardware radio backend
-        // is connected — Hamlib/TCI take precedence.
-        const bool radioConnected = m_hamlibBackend->isConnected()
-                                 || m_tciBackend->isConnected();
-        if (!radioConnected) {
-            if (s.dialFreqHz > 0)
-                m_entryPanel->setRadioFreq(static_cast<double>(s.dialFreqHz) / 1e6);
-            if (!s.mode.isEmpty())
-                m_entryPanel->setRadioMode(s.mode, s.submode);
-        }
+    for (DigitalListenerService *svc : m_digitalListeners)
+        wireDigitalListener(svc);
 
-        // Update DX call/grid whenever WSJT-X reports a change so the entry
-        // panel always tracks the currently selected station.  We compare
-        // against the last known values to avoid clobbering the field while
-        // the operator is typing (Status fires ~1 Hz even with no change).
-        if (s.dxCall != m_wsjtxLastDxCall) {
-            m_wsjtxLastDxCall = s.dxCall;
-            if (s.dxCall.isEmpty())
-                m_entryPanel->clearForm();  // station deselected → reset panel
-            else
-                m_entryPanel->setDxCall(s.dxCall);
-        }
-        if (s.dxGrid != m_wsjtxLastDxGrid) {
-            m_wsjtxLastDxGrid = s.dxGrid;
-            if (!s.dxGrid.isEmpty())
-                m_entryPanel->setDxGrid(s.dxGrid);
-        }
-    });
-
-    connect(m_wsjtxService, &WsjtxService::cleared,
-            m_entryPanel, &QsoEntryPanel::clearForm);
-
-    connect(m_wsjtxService, &WsjtxService::qsoLogged,
-            this, [this](const Qso &qso) {
-        if (!Settings::instance().wsjtxAutoLog()) return;
-        onQsoReady(qso);
-        m_wsjtxLastDxCall.clear();
-        m_wsjtxLastDxGrid.clear();
-        m_entryPanel->clearForm();
-    });
-
-    connect(m_wsjtxService, &WsjtxService::heartbeat,
-            this, [this](const QString &clientId, const QString &version, int) {
-        statusBar()->showMessage(
-            tr("WSJT-X heartbeat: %1 v%2").arg(clientId, version), 3000);
-    });
-
-    // Re-apply listener settings whenever settings change
+    // Re-start / stop each listener when settings change
     connect(&Settings::instance(), &Settings::changed, this, [this]() {
-        const Settings &s = Settings::instance();
-        if (s.wsjtxEnabled() && !m_wsjtxService->isRunning())
-            m_wsjtxService->start(s.wsjtxPort(), s.wsjtxUdpAddress());
-        else if (!s.wsjtxEnabled() && m_wsjtxService->isRunning())
-            m_wsjtxService->stop();
+        for (DigitalListenerService *svc : m_digitalListeners) {
+            if (svc->isEnabled() && !svc->isRunning())
+                svc->start();
+            else if (!svc->isEnabled() && svc->isRunning())
+                svc->stop();
+        }
     });
 
-    if (Settings::instance().wsjtxEnabled())
-        m_wsjtxService->start(Settings::instance().wsjtxPort(),
-                              Settings::instance().wsjtxUdpAddress());
 }
 
 MainWindow::~MainWindow() = default;
@@ -213,13 +131,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     // Disconnect and shut down radio backends before Qt's child destruction
     // order can deliver signals to already-destroyed status bar widgets.
-    if (m_tciBackend) {
-        disconnect(m_tciBackend, nullptr, this, nullptr);
-        m_tciBackend->disconnectTci();
-    }
-    if (m_hamlibBackend) {
-        disconnect(m_hamlibBackend, nullptr, this, nullptr);
-        m_hamlibBackend->disconnectRig();
+    for (RadioBackend *b : m_radioBackends) {
+        disconnect(b, nullptr, this, nullptr);
+        b->disconnectRadio();
     }
 
     Settings::instance().setMainWindowGeometry(saveGeometry());
@@ -308,26 +222,6 @@ void MainWindow::setupMenuBar()
     helpMenu->addAction(m_aboutAction);
 }
 
-void MainWindow::setupToolBar()
-{
-    QToolBar *toolBar = addToolBar(tr("Main Toolbar"));
-    toolBar->setObjectName(QStringLiteral("mainToolBar"));
-    toolBar->setMovable(false);
-
-    // Application logo on the left of the toolbar
-    auto *logoLabel = new QLabel(toolBar);
-    const QIcon appIcon(QStringLiteral(":/resources/icons/nf0t-logger.svg"));
-    logoLabel->setPixmap(appIcon.pixmap(32, 32));
-    logoLabel->setContentsMargins(4, 0, 8, 0);
-    toolBar->addWidget(logoLabel);
-    toolBar->addSeparator();
-
-    toolBar->addAction(m_newLogAction);
-    toolBar->addSeparator();
-    toolBar->addAction(m_importAdifAction);
-    toolBar->addAction(m_exportAdifAction);
-}
-
 void MainWindow::setupCentralWidget()
 {
     m_splitter = new QSplitter(Qt::Vertical, this);
@@ -401,12 +295,55 @@ void MainWindow::setupCentralWidget()
     setCentralWidget(m_splitter);
 }
 
+static const char *kIndicatorIdle  =
+    "QLabel { color: palette(window-text); border: 1px solid palette(mid);"
+    " border-radius: 4px; padding: 2px 8px; }";
+static const char *kIndicatorGreen =
+    "QLabel { background: #2ea44f; color: white;"
+    " border-radius: 4px; padding: 2px 8px; }";
+static const char *kIndicatorRed   =
+    "QLabel { background: #cf222e; color: white;"
+    " border-radius: 4px; padding: 2px 8px; }";
+
+void MainWindow::setIndicatorState(QLabel *indicator, IndicatorState state)
+{
+    if (!indicator) return;
+    switch (state) {
+    case IndicatorState::Idle:      indicator->setStyleSheet(kIndicatorIdle);  break;
+    case IndicatorState::Connected: indicator->setStyleSheet(kIndicatorGreen); break;
+    case IndicatorState::Fault:     indicator->setStyleSheet(kIndicatorRed);   break;
+    }
+}
+
+void MainWindow::showStatusMessage(const QString &msg, int ms)
+{
+    m_statusMsgLabel->setText(msg);
+    if (ms > 0)
+        QTimer::singleShot(ms, this, [this]() { m_statusMsgLabel->clear(); });
+}
+
 void MainWindow::setupStatusBar()
 {
-    m_radioStatusLabel = new QLabel(tr("Radio: Not connected"), this);
-    m_qsoCountLabel    = new QLabel(tr("QSOs: 0"), this);
+    auto makeIndicator = [this](const QString &label) {
+        auto *w = new QLabel(label, this);
+        w->setStyleSheet(kIndicatorIdle);
+        w->setContentsMargins(2, 0, 2, 0);
+        return w;
+    };
 
-    statusBar()->addWidget(m_radioStatusLabel);
+    m_hamlibIndicator = makeIndicator(tr("Hamlib"));
+    m_tciIndicator    = makeIndicator(tr("TCI"));
+    m_wsjtxIndicator  = makeIndicator(tr("WSJT-X"));
+
+    m_statusMsgLabel  = new QLabel(this);
+    m_statusMsgLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+
+    m_qsoCountLabel   = new QLabel(tr("QSOs: 0"), this);
+
+    statusBar()->addWidget(m_hamlibIndicator);
+    statusBar()->addWidget(m_tciIndicator);
+    statusBar()->addWidget(m_wsjtxIndicator);
+    statusBar()->addWidget(m_statusMsgLabel);
     statusBar()->addPermanentWidget(m_qsoCountLabel);
 }
 
@@ -416,12 +353,28 @@ void MainWindow::setupStatusBar()
 
 void MainWindow::openDefaultDatabase()
 {
-    const QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    QDir().mkpath(dataDir);
-    const QString dbPath = dataDir + "/log.db";
+    const Settings &cfg = Settings::instance();
+    const QString backendKey = cfg.dbBackend();   // "sqlite" | "mariadb"
 
-    auto backend = std::make_unique<SqliteBackend>();
-    const QVariantMap config = {{"path", dbPath}};
+    std::unique_ptr<DatabaseInterface> backend;
+    QVariantMap config;
+
+    if (backendKey == QLatin1String("mariadb")) {
+        config = {
+            {"host",     cfg.dbMariadbHost()},
+            {"port",     cfg.dbMariadbPort()},
+            {"name",     cfg.dbMariadbDatabase()},
+            {"user",     cfg.dbMariadbUsername()},
+            {"password", cfg.dbMariadbPassword()},
+        };
+        backend = std::make_unique<MariaDbBackend>();
+    } else {
+        const QString dataDir =
+            QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+        QDir().mkpath(dataDir);
+        config  = {{"path", dataDir + "/log.db"}};
+        backend = std::make_unique<SqliteBackend>();
+    }
 
     if (auto r = backend->open(config); !r) {
         QMessageBox::critical(this, tr("Database Error"),
@@ -436,7 +389,10 @@ void MainWindow::openDefaultDatabase()
     }
 
     m_db = std::move(backend);
-    statusBar()->showMessage(tr("Database opened: %1").arg(dbPath), 4000);
+    const QString label = backendKey == QLatin1String("mariadb")
+        ? tr("MariaDB (%1)").arg(cfg.dbMariadbHost())
+        : config["path"].toString();
+    showStatusMessage(tr("Database opened: %1").arg(label), 4000);
     reloadLog();
 }
 
@@ -571,26 +527,122 @@ void MainWindow::onConnectHamlib()
 {
     if (!Settings::instance().hamlibEnabled()) {
         QMessageBox::information(this, tr("Hamlib"),
-            tr("Hamlib is not enabled. Enable it in Settings → Radio."));
+            tr("Hamlib is not enabled. Enable it in Settings \u2192 Radio."));
         return;
     }
-    m_hamlibBackend->connectRig();
+    m_hamlibBackend->connectRadio();
 }
 
 void MainWindow::onConnectTci()
 {
     if (!Settings::instance().tciEnabled()) {
         QMessageBox::information(this, tr("TCI"),
-            tr("TCI is not enabled. Enable it in Settings → Radio."));
+            tr("TCI is not enabled. Enable it in Settings \u2192 Radio."));
         return;
     }
-    m_tciBackend->connectTci();
+    m_tciBackend->connectRadio();
 }
 
 void MainWindow::onDisconnectRadio()
 {
-    m_hamlibBackend->disconnectRig();
-    m_tciBackend->disconnectTci();
+    for (RadioBackend *b : m_radioBackends)
+        b->disconnectRadio();
+}
+
+// ---------------------------------------------------------------------------
+// Generic backend wiring helpers
+// ---------------------------------------------------------------------------
+
+bool MainWindow::anyRadioConnected() const
+{
+    for (const RadioBackend *b : m_radioBackends)
+        if (b->isConnected()) return true;
+    return false;
+}
+
+void MainWindow::wireRadioBackend(RadioBackend *backend)
+{
+    QLabel *indicator = (backend == m_hamlibBackend) ? m_hamlibIndicator : m_tciIndicator;
+
+    connect(backend, &RadioBackend::freqChanged,
+            m_entryPanel, &QsoEntryPanel::setRadioFreq);
+    connect(backend, &RadioBackend::modeChanged,
+            m_entryPanel, &QsoEntryPanel::setRadioMode);
+
+    connect(backend, &RadioBackend::connected, this, [this, backend, indicator]() {
+        setIndicatorState(indicator, IndicatorState::Connected);
+        for (QAction *act : m_radioConnectActions)
+            act->setEnabled(false);
+        m_disconnectRadioAction->setEnabled(true);
+        showStatusMessage(
+            tr("%1 connected.").arg(backend->displayName()), 3000);
+    });
+
+    connect(backend, &RadioBackend::disconnected, this, [this, indicator]() {
+        setIndicatorState(indicator, IndicatorState::Idle);
+        if (!anyRadioConnected()) {
+            for (QAction *act : m_radioConnectActions)
+                act->setEnabled(true);
+            m_disconnectRadioAction->setEnabled(false);
+        }
+        showStatusMessage(tr("Radio disconnected."), 3000);
+    });
+
+    connect(backend, &RadioBackend::error, this, [this, backend, indicator](const QString &msg) {
+        setIndicatorState(indicator, IndicatorState::Fault);
+        showStatusMessage(
+            tr("%1 error: %2").arg(backend->displayName(), msg), 6000);
+    });
+}
+
+void MainWindow::wireDigitalListener(DigitalListenerService *svc)
+{
+    QLabel *indicator = (svc == m_wsjtxService) ? m_wsjtxIndicator : nullptr;
+
+    connect(svc, &DigitalListenerService::started, this, [this, indicator]() {
+        setIndicatorState(indicator, IndicatorState::Connected);
+    });
+    connect(svc, &DigitalListenerService::stopped, this, [this, indicator]() {
+        setIndicatorState(indicator, IndicatorState::Idle);
+    });
+
+    connect(svc, &DigitalListenerService::radioStatusChanged,
+            this, [this](quint64 dialFreqHz, const QString &mode, const QString &submode) {
+        if (anyRadioConnected()) return;
+        if (dialFreqHz > 0)
+            m_entryPanel->setRadioFreq(static_cast<double>(dialFreqHz) / 1e6);
+        if (!mode.isEmpty())
+            m_entryPanel->setRadioMode(mode, submode);
+    });
+
+    connect(svc, &DigitalListenerService::stationSelected,
+            this, [this](const QString &dxCall, const QString &dxGrid) {
+        if (dxCall.isEmpty()) {
+            m_entryPanel->clearForm();
+        } else {
+            m_entryPanel->setDxCall(dxCall);
+            if (!dxGrid.isEmpty())
+                m_entryPanel->setDxGrid(dxGrid);
+        }
+    });
+
+    connect(svc, &DigitalListenerService::cleared,
+            m_entryPanel, &QsoEntryPanel::clearForm);
+
+    connect(svc, &DigitalListenerService::qsoLogged,
+            this, [this](const Qso &qso) {
+        if (!Settings::instance().wsjtxAutoLog()) return;
+        onQsoReady(qso);
+        m_entryPanel->clearForm();
+    });
+
+    connect(svc, &DigitalListenerService::logMessage,
+            this, [this](const QString &msg) {
+        showStatusMessage(msg, 3000);
+    });
+
+    if (svc->isEnabled())
+        svc->start();
 }
 
 // ---------------------------------------------------------------------------
@@ -601,12 +653,8 @@ void MainWindow::onQslDownload()
 {
     if (!m_db) return;
 
-    const QList<QslService*> services = {
-        m_lotwService, m_eqslService, m_qrzService
-    };
     const QList<Qso> localQsos = m_db->fetchQsos().value_or(QList<Qso>{});
-
-    QslDownloadDialog dlg(services, localQsos, this);
+    QslDownloadDialog dlg(m_qslServices, localQsos, this);
     connect(&dlg, &QslDownloadDialog::downloadCompleted, this,
             [this](const QList<Qso> &confirmed, const QStringList &errors) {
         applyDownloadedConfirmations(confirmed, errors);
@@ -618,11 +666,7 @@ void MainWindow::onQslUpload()
 {
     if (!m_db) return;
 
-    const QList<QslService*> services = {
-        m_lotwService, m_eqslService, m_qrzService
-    };
-
-    QslUploadDialog dlg(services, m_db.get(), this);
+    QslUploadDialog dlg(m_qslServices, m_db.get(), this);
     connect(&dlg, &QslUploadDialog::uploadCompleted, this,
             [this](const QList<Qso> &updated, const QStringList &) {
         applyUploadedQsos(updated, {});
@@ -636,7 +680,7 @@ void MainWindow::applyUploadedQsos(const QList<Qso> &updated, const QStringList 
     for (const Qso &q : updated)
         std::ignore = m_db->updateQso(q);
     reloadLog();
-    statusBar()->showMessage(tr("QSL upload: %1 QSO(s) marked sent.").arg(updated.size()), 4000);
+    showStatusMessage(tr("QSL upload: %1 QSO(s) marked sent.").arg(updated.size()), 4000);
 }
 
 void MainWindow::applyDownloadedConfirmations(const QList<Qso> &matched,
@@ -650,7 +694,7 @@ void MainWindow::applyDownloadedConfirmations(const QList<Qso> &matched,
         std::ignore = m_db->updateQso(q);
 
     reloadLog();
-    statusBar()->showMessage(tr("QSL download: %1 QSO(s) updated.").arg(matched.size()), 4000);
+    showStatusMessage(tr("QSL download: %1 QSO(s) updated.").arg(matched.size()), 4000);
 }
 
 void MainWindow::onQsoReady(const Qso &qso)
@@ -659,14 +703,14 @@ void MainWindow::onQsoReady(const Qso &qso)
 
     Qso inserted = qso;
     if (auto r = m_db->insertQso(inserted); !r) {
-        statusBar()->showMessage(
+        showStatusMessage(
             tr("Failed to log contact: %1").arg(r.error()), 5000);
         return;
     }
 
     m_logModel->prependQso(inserted);
     updateQsoCount();
-    statusBar()->showMessage(
+    showStatusMessage(
         tr("Logged: %1").arg(inserted.callsign), 3000);
 }
 
@@ -688,7 +732,7 @@ void MainWindow::onEditQso(const QModelIndex &index)
     }
 
     m_logModel->updateQso(row, updated);
-    statusBar()->showMessage(tr("QSO updated: %1").arg(updated.callsign), 3000);
+    showStatusMessage(tr("QSO updated: %1").arg(updated.callsign), 3000);
 }
 
 void MainWindow::onDeleteSelectedQso()
@@ -717,5 +761,5 @@ void MainWindow::onDeleteSelectedQso()
 
     m_logModel->removeQso(row);
     updateQsoCount();
-    statusBar()->showMessage(tr("QSO deleted: %1").arg(q.callsign), 3000);
+    showStatusMessage(tr("QSO deleted: %1").arg(q.callsign), 3000);
 }

@@ -2,9 +2,13 @@
 
 #include "SettingsPage.h"
 
+#include <QList>
+#include <QString>
+
 class QCheckBox;
 class QComboBox;
 class QGroupBox;
+class QLabel;
 class QLineEdit;
 class QSpinBox;
 
@@ -19,13 +23,33 @@ public:
     void load()  override;
     void apply() override;
 
+    // Public so the Hamlib C callback (file scope) can access it
+    struct RigEntry {
+        int     model   = 0;
+        QString mfg;
+        QString name;
+        int     status  = 0;
+        int     maxBaud = 0;
+    };
+
 private slots:
     void onHamlibConnTypeChanged(int index);
+    void onRigFilterChanged(const QString &text);
+    void onShowAllStatusChanged(int state);
+    void onRigSelected(int index);
 
 private:
+    void populateRigCombo();   // rebuild combo from m_allRigs + current filter
+    void loadRigList();        // call once in constructor via rig_list_foreach
+
+    QList<RigEntry> m_allRigs; // sorted by mfg then name
+
     // Hamlib
     QCheckBox  *m_hamlibEnabled    = nullptr;
-    QSpinBox   *m_rigModel         = nullptr;
+    QLineEdit  *m_rigFilter        = nullptr;
+    QComboBox  *m_rigCombo         = nullptr;
+    QCheckBox  *m_showAllStatus    = nullptr;
+    QLabel     *m_rigStatusLabel   = nullptr;   // shows status of selected rig
     QComboBox  *m_connType         = nullptr;
 
     QGroupBox  *m_serialGroup      = nullptr;

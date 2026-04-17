@@ -1,7 +1,6 @@
 #pragma once
 
-#include <QObject>
-#include <QString>
+#include "RadioBackend.h"
 
 #ifdef HAVE_HAMLIB
 #include <hamlib/rig.h>
@@ -14,9 +13,9 @@ class QTimer;
 /// Polls the connected rig every 500 ms for frequency and mode changes,
 /// emitting freqChanged() / modeChanged() signals consumed by QsoEntryPanel.
 ///
-/// When HAVE_HAMLIB is not defined the class still compiles; connectRig()
+/// When HAVE_HAMLIB is not defined the class still compiles; connectRadio()
 /// always returns false and emits an error() signal.
-class HamlibBackend : public QObject
+class HamlibBackend : public RadioBackend
 {
     Q_OBJECT
 
@@ -24,28 +23,14 @@ public:
     explicit HamlibBackend(QObject *parent = nullptr);
     ~HamlibBackend() override;
 
-    /// Open the rig using current Settings values.
-    /// Returns true on success; on failure emits error() with details.
-    bool connectRig();
-
-    /// Gracefully close the rig connection.
-    void disconnectRig();
-
-    bool isConnected() const;
+    QString displayName() const override { return QStringLiteral("Hamlib"); }
+    bool    isConnected()  const override;
+    bool    connectRadio()       override;
+    void    disconnectRadio()    override;
 
 public slots:
-    /// Push a new frequency (MHz) to the rig's current VFO.
-    void setFreq(double freqMhz);
-
-    /// Push a new mode to the rig (ADIF mode string, e.g. "SSB", "CW").
-    void setMode(const QString &adifMode, const QString &submode = {});
-
-signals:
-    void freqChanged(double freqMhz);
-    void modeChanged(const QString &mode, const QString &submode);
-    void connected();
-    void disconnected();
-    void error(const QString &message);
+    void setFreq(double freqMhz) override;
+    void setMode(const QString &adifMode, const QString &submode = {}) override;
 
 private slots:
     void poll();

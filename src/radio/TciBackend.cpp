@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 
 TciBackend::TciBackend(QObject *parent)
-    : QObject(parent)
+    : RadioBackend(parent)
 {
     m_socket = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
 
@@ -30,14 +30,14 @@ TciBackend::TciBackend(QObject *parent)
 
 TciBackend::~TciBackend()
 {
-    disconnectTci();
+    disconnectRadio();
 }
 
 // ---------------------------------------------------------------------------
 // Connect / disconnect
 // ---------------------------------------------------------------------------
 
-bool TciBackend::connectTci()
+bool TciBackend::connectRadio()
 {
     const Settings &s = Settings::instance();
     const QString host = s.tciHost().isEmpty() ? QStringLiteral("localhost") : s.tciHost();
@@ -54,7 +54,7 @@ bool TciBackend::connectTci()
     return true;  // actual success reported via connected() / error() signals
 }
 
-void TciBackend::disconnectTci()
+void TciBackend::disconnectRadio()
 {
     m_intentionalClose = true;
     m_reconnectTimer->stop();
@@ -124,7 +124,7 @@ void TciBackend::onError(QAbstractSocket::SocketError /*socketError*/)
 void TciBackend::onReconnectTimer()
 {
     if (!m_intentionalClose)
-        connectTci();
+        connectRadio();
 }
 
 // ---------------------------------------------------------------------------

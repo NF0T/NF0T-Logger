@@ -56,7 +56,9 @@ set(HEADERS
     ui/QslColumns.h
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
+    radio/DigitalListenerService.h
     radio/HamlibBackend.h
+    radio/RadioBackend.h
     radio/TciBackend.h
     wsjtx/WsjtxService.h
     qsl/QslService.h
