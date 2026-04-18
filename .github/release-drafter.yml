@@ -1,0 +1,46 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - title: '🚨 Breaking Changes'
+    labels: ['breaking-change']
+  - title: '✨ New Features'
+    labels: ['enhancement', 'feature']
+  - title: '🐛 Bug Fixes'
+    labels: ['bug', 'fix']
+  - title: '📻 Radio / CAT Control'
+    labels: ['radio', 'hamlib', 'tci']
+  - title: '📡 WSJT-X / Digital Modes'
+    labels: ['wsjt-x', 'digital']
+  - title: '📋 Logbook / ADIF'
+    labels: ['logbook', 'adif']
+  - title: '🔖 QSL Services'
+    labels: ['qsl', 'lotw', 'eqsl', 'qrz', 'clublog']
+  - title: '🗄️ Database'
+    labels: ['database', 'migration']
+  - title: '⚙️ Settings / UI'
+    labels: ['settings', 'ui']
+  - title: '🔧 Build / CI'
+    labels: ['build', 'ci', 'chore']
+  - title: '📖 Documentation'
+    labels: ['documentation', 'docs']
+
+change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels: ['breaking-change']
+  minor:
+    labels: ['enhancement', 'feature']
+  patch:
+    labels: ['bug', 'fix', 'chore', 'documentation', 'build', 'ci']
+  default: patch
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  ---
+  **Full Changelog**: https://github.com/NF0T/NF0T-Logger/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
