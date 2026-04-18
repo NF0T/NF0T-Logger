@@ -17,6 +17,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Sql WebSockets)
 qt_standard_project_setup()
 
+# Place all executables in <build>/bin so artifact paths are predictable
+# across platforms regardless of what qt_standard_project_setup() does.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # qtkeychain — secure credential storage (KWallet / libsecret / macOS Keychain)
 find_package(Qt6Keychain REQUIRED)
 message(STATUS "Qt6Keychain found — secure credential storage enabled")
