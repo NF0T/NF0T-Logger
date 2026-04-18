@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Linux — Debian Trixie (authoritative platform)
+  # Runs inside a Debian Trixie container on the Ubuntu runner host so we test
+  # against exactly the same package versions as the maintainer's environment.
+  # ---------------------------------------------------------------------------
+  build-linux:
+    name: Linux (Debian Trixie)
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+
+    steps:
+      # Install git before checkout — the base Debian image doesn't include it
+      # and actions/checkout needs it to be present in the container.
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git
+
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get install -y --no-install-recommends \
+            g++ cmake ninja-build pkg-config \
+            qt6-base-dev \
+            libqt6websockets6-dev \
+            qtkeychain-qt6-dev \
+            libsecret-1-dev \
+            libhamlib-dev
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NF0T-Logger-linux
+          path: build/NF0T-Logger
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Windows — MSYS2 MinGW64
+  # Uses the same GCC/MinGW toolchain family as the local Windows dev setup.
+  # All dependencies come from the MSYS2 package repo (pacman).
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Windows (MSYS2 MinGW64)
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          pacboy: >-
+            gcc:p
+            cmake:p
+            ninja:p
+            pkgconf:p
+            qt6-base:p
+            qt6-websockets:p
+            qtkeychain-qt6:p
+            hamlib:p
+
+      - name: Configure
+        shell: msys2 {0}
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmake --build build --parallel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NF0T-Logger-windows
+          path: build/NF0T-Logger.exe
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # macOS — Apple Silicon (Homebrew)
+  # ---------------------------------------------------------------------------
+  build-macos:
+    name: macOS (Apple Silicon)
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake ninja qt qtkeychain hamlib
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_PREFIX_PATH=$(brew --prefix qt);$(brew --prefix qtkeychain);$(brew --prefix hamlib)"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NF0T-Logger-macos
+          path: build/NF0T-Logger
+          if-no-files-found: error
