@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Ryan Butler (NF0T)
 #pragma once
 
 #include "radio/DigitalListenerService.h"
