@@ -21,7 +21,7 @@ NF0T-Logger grew out of wanting a logger that worked reliably on Linux, felt lig
 
 ## Screenshots
 
-*Screenshots coming soon.*
+![NF0T Logger main window showing live FT8 contacts on 20m and 30m with TCI and WSJT-X connected](docs/screenshots/main-window.png)
 
 ---
 
