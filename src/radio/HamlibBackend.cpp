@@ -155,7 +155,8 @@ bool HamlibBackend::configureSerial()
     const QByteArray device = s.hamlibSerialDevice().toLocal8Bit();
 
     m_rig->state.rigport.type.rig = RIG_PORT_SERIAL;
-    qstrncpy(m_rig->state.rigport.pathname, device.constData(), FILPATHLEN - 1);
+    qstrncpy(m_rig->state.rigport.pathname, device.constData(),
+             sizeof(m_rig->state.rigport.pathname) - 1);
 
     m_rig->state.rigport.parm.serial.rate      = s.hamlibBaudRate();
     m_rig->state.rigport.parm.serial.data_bits = s.hamlibDataBits();
@@ -193,7 +194,8 @@ bool HamlibBackend::configureNetwork()
 
     m_rig->state.rigport.type.rig = RIG_PORT_NETWORK;
     const QByteArray addr = QStringLiteral("%1:%2").arg(host).arg(port).toLocal8Bit();
-    qstrncpy(m_rig->state.rigport.pathname, addr.constData(), FILPATHLEN - 1);
+    qstrncpy(m_rig->state.rigport.pathname, addr.constData(),
+             sizeof(m_rig->state.rigport.pathname) - 1);
     return true;
 }
 
