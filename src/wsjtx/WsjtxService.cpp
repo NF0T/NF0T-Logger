@@ -50,8 +50,19 @@ void WsjtxService::stop()
 {
     if (!m_socket) return;
 
-    if (!m_multicastGroup.isEmpty())
-        m_socket->leaveMulticastGroup(QHostAddress(m_multicastGroup));
+    if (!m_multicastGroup.isEmpty()) {
+        const QHostAddress grp(m_multicastGroup);
+        const QStringList selectedIfaces = Settings::instance().wsjtxMulticastIfaces();
+        if (!selectedIfaces.isEmpty()) {
+            for (const QString &name : selectedIfaces) {
+                const QNetworkInterface iface = QNetworkInterface::interfaceFromName(name);
+                if (iface.isValid())
+                    m_socket->leaveMulticastGroup(grp, iface);
+            }
+        } else {
+            m_socket->leaveMulticastGroup(grp);
+        }
+    }
 
     m_socket->close();
     m_socket->deleteLater();
@@ -85,16 +96,32 @@ bool WsjtxService::startOnAddress(quint16 port, const QString &udpAddress)
     }
 
     if (isMulticast) {
+        const QStringList selectedIfaces = Settings::instance().wsjtxMulticastIfaces();
         bool joined = false;
-        const auto ifaces = QNetworkInterface::allInterfaces();
-        for (const QNetworkInterface &iface : ifaces) {
-            const auto flags = iface.flags();
-            if (!(flags & QNetworkInterface::IsUp))        continue;
-            if (!(flags & QNetworkInterface::CanMulticast)) continue;
-            if (flags & QNetworkInterface::IsLoopBack)     continue;
-            if (m_socket->joinMulticastGroup(addr, iface))
-                joined = true;
+
+        if (!selectedIfaces.isEmpty()) {
+            // Join only the interfaces the user explicitly selected
+            for (const QString &name : selectedIfaces) {
+                const QNetworkInterface iface = QNetworkInterface::interfaceFromName(name);
+                if (!iface.isValid()) continue;
+                if (m_socket->joinMulticastGroup(addr, iface)) {
+                    joined = true;
+                    emit logMessage(tr("WSJT-X: joined multicast %1 on %2.")
+                                        .arg(udpAddress, name));
+                }
+            }
+        } else {
+            // Auto: join on all multicast-capable interfaces (including loopback)
+            const auto ifaces = QNetworkInterface::allInterfaces();
+            for (const QNetworkInterface &iface : ifaces) {
+                const auto flags = iface.flags();
+                if (!(flags & QNetworkInterface::IsUp))         continue;
+                if (!(flags & QNetworkInterface::CanMulticast)) continue;
+                if (m_socket->joinMulticastGroup(addr, iface))
+                    joined = true;
+            }
         }
+
         if (!joined)
             m_socket->joinMulticastGroup(addr);
     }

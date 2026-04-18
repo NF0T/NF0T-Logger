@@ -5,6 +5,7 @@
 #include <QDate>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 /// Typed settings singleton.
 /// Non-sensitive values are stored in QSettings (INI file).
@@ -233,6 +234,11 @@ public:
 
     bool    wsjtxAutoLog() const;    // auto-insert QSOLogged QSOs to DB
     void    setWsjtxAutoLog(bool v);
+
+    /// Interface names to join for multicast. Empty = auto (all multicast-capable
+    /// non-loopback interfaces). Stored as comma-separated interface name list.
+    QStringList wsjtxMulticastIfaces() const;
+    void        setWsjtxMulticastIfaces(const QStringList &v);
 
     // -----------------------------------------------------------------------
     // UI state (window geometry etc.)

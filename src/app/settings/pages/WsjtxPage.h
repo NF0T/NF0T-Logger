@@ -3,7 +3,10 @@
 #include "SettingsPage.h"
 
 class QCheckBox;
+class QGroupBox;
+class QLabel;
 class QLineEdit;
+class QListWidget;
 class QSpinBox;
 
 class WsjtxPage : public SettingsPage
@@ -17,9 +20,16 @@ public:
     void load()  override;
     void apply() override;
 
+private slots:
+    void onAddressChanged(const QString &text);
+
 private:
-    QCheckBox *m_enabled        = nullptr;
-    QSpinBox  *m_port           = nullptr;
-    QLineEdit *m_multicastGroup = nullptr;
-    QCheckBox *m_autoLog        = nullptr;
+    void populateIfaceList();
+
+    QCheckBox  *m_enabled        = nullptr;
+    QSpinBox   *m_port           = nullptr;
+    QLineEdit  *m_multicastGroup = nullptr;
+    QCheckBox  *m_autoLog        = nullptr;
+    QGroupBox  *m_ifaceBox       = nullptr;
+    QListWidget *m_ifaceList     = nullptr;
 };

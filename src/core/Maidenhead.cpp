@@ -1,6 +1,7 @@
 #include "Maidenhead.h"
 
 #include <cmath>
+#include <numbers>
 
 namespace Maidenhead {
 
@@ -9,7 +10,7 @@ namespace Maidenhead {
 // ---------------------------------------------------------------------------
 
 static constexpr double kEarthRadiusKm = 6371.0;
-static constexpr double kPi            = M_PI;
+static constexpr double kPi            = std::numbers::pi;
 
 // Subsquare cell sizes in degrees
 static constexpr double kSubLon = 5.0  / 60.0;   // 5 arcmin

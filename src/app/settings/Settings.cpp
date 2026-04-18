@@ -282,6 +282,15 @@ void    Settings::setWsjtxUdpAddress(const QString &v) { put("wsjtx/udp_address"
 bool    Settings::wsjtxAutoLog() const              { return get("wsjtx/auto_log", true); }
 void    Settings::setWsjtxAutoLog(bool v)           { put("wsjtx/auto_log", v); }
 
+QStringList Settings::wsjtxMulticastIfaces() const {
+    const QString raw = get("wsjtx/multicast_ifaces", QString());
+    if (raw.isEmpty()) return {};
+    return raw.split(QLatin1Char(','), Qt::SkipEmptyParts);
+}
+void Settings::setWsjtxMulticastIfaces(const QStringList &v) {
+    put("wsjtx/multicast_ifaces", v.join(QLatin1Char(',')));
+}
+
 // ---------------------------------------------------------------------------
 // UI state
 // ---------------------------------------------------------------------------
