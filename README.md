@@ -1,5 +1,8 @@
 # NF0T-Logger
 
+[![CI](https://github.com/NF0T/NF0T-Logger/actions/workflows/ci.yml/badge.svg)](https://github.com/NF0T/NF0T-Logger/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 A cross-platform amateur radio contact logger for Linux, Windows, and macOS, built with C++23 and Qt 6.
 
 NF0T-Logger grew out of wanting a logger that worked reliably on Linux, felt lighter than Log4OM, and was open enough for others to extend. It is designed to be a daily-driver logger for the NF0T station and is open to use and contribution by any amateur radio operator.
