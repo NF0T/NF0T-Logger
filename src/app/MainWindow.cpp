@@ -559,9 +559,13 @@ void MainWindow::onAbout()
 {
     QMessageBox::about(this,
         tr("About NF0T Logger"),
-        tr("<b>NF0T Logger</b> v0.1.0<br>"
+        tr("<b>NF0T Logger</b> v%1 (commit&nbsp;%2)<br>"
            "Amateur Radio Contact Logger<br><br>"
-           "Built with C++ and Qt6.")
+           "Built with C++ and Qt6.<br><br>"
+           "<a href=\"https://github.com/NF0T/NF0T-Logger\">"
+           "github.com/NF0T/NF0T-Logger</a>")
+        .arg(QStringLiteral(APP_VERSION),
+             QStringLiteral(GIT_COMMIT_HASH))
     );
 }
 

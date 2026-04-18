@@ -21,6 +21,24 @@ qt_standard_project_setup()
 find_package(Qt6Keychain REQUIRED)
 message(STATUS "Qt6Keychain found — secure credential storage enabled")
 
+# Build-time version info — passed as compile definitions so the About dialog
+# can show the exact commit the binary was built from.
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT GIT_COMMIT_HASH OR GIT_COMMIT_HASH STREQUAL "")
+    set(GIT_COMMIT_HASH "unknown")
+endif()
+message(STATUS "Build commit: ${GIT_COMMIT_HASH}")
+add_compile_definitions(
+    APP_VERSION="${PROJECT_VERSION}"
+    GIT_COMMIT_HASH="${GIT_COMMIT_HASH}"
+)
+
 # Optional: Hamlib for CAT radio control
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
