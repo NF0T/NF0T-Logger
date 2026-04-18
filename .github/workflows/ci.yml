@@ -20,10 +20,10 @@ jobs:
       image: debian:trixie
 
     steps:
-      # Install git before checkout — the base Debian image doesn't include it
-      # and actions/checkout needs it to be present in the container.
+      # Install git + ca-certificates before checkout — the base Debian image
+      # has neither, and actions/checkout needs both to clone over HTTPS.
       - name: Install git
-        run: apt-get update && apt-get install -y --no-install-recommends git
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
 
       - uses: actions/checkout@v4
 
