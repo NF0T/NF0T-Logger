@@ -102,7 +102,8 @@ target_link_libraries(NF0T-Logger PRIVATE
 
 if(HAMLIB_FOUND)
     target_include_directories(NF0T-Logger PRIVATE ${HAMLIB_INCLUDE_DIRS})
-    target_link_libraries(NF0T-Logger PRIVATE ${HAMLIB_LIBRARIES})
+    target_link_directories(NF0T-Logger PRIVATE ${HAMLIB_LIBRARY_DIRS})
+    target_link_libraries(NF0T-Logger PRIVATE ${HAMLIB_LINK_LIBRARIES})
 endif()
 
 # Install rules
