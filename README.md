@@ -119,6 +119,12 @@ NF0T-Logger is under active development and currently at **v0.1.0**. The core lo
 
 ---
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features and milestones.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests go in [GitHub Issues](https://github.com/NF0T/NF0T-Logger/issues).
