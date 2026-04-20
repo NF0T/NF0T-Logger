@@ -49,6 +49,7 @@ bool TciBackend::connectRadio()
 
     m_intentionalClose = false;
     m_serverReady      = false;
+    m_trackedTrx       = -1;
     m_lastFreqHz       = 0.0;
     m_lastTciMode.clear();
 
@@ -153,10 +154,15 @@ void TciBackend::parseMessage(const QString &msg)
         if (parts.size() < 3) return;
         const int trx = parts[0].toInt();
         const int vfo = parts[1].toInt();
-        if (trx != 0 || vfo != 0) return;  // only track TRX 0 / VFO A
+        if (vfo != 0) return;   // only VFO A
         bool ok = false;
         const double hz = parts[2].toDouble(&ok);
         if (!ok || hz <= 0.0) return;
+        // Latch onto whichever TRX sends the first valid frequency — handles
+        // Slice A (TRX 0) and Slice B (TRX 1) transparently.
+        if (m_trackedTrx == -1)
+            m_trackedTrx = trx;
+        if (trx != m_trackedTrx) return;
         if (hz != m_lastFreqHz) {
             m_lastFreqHz = hz;
             emit freqChanged(hz / 1'000'000.0);
@@ -168,7 +174,7 @@ void TciBackend::parseMessage(const QString &msg)
         // trx:{trx},{true|false}
         const QStringList parts = params.split(QLatin1Char(','));
         if (parts.size() < 2) return;
-        if (parts[0].toInt() != 0) return;
+        if (m_trackedTrx != -1 && parts[0].toInt() != m_trackedTrx) return;
         const bool tx = (parts[1].trimmed().toLower() == QLatin1String("true"));
         if (tx != m_transmitting) {
             m_transmitting = tx;
@@ -182,7 +188,7 @@ void TciBackend::parseMessage(const QString &msg)
         const QStringList parts = params.split(QLatin1Char(','));
         if (parts.size() < 2) return;
         const int trx = parts[0].toInt();
-        if (trx != 0) return;
+        if (m_trackedTrx != -1 && trx != m_trackedTrx) return;
         const QString tciMode = parts[1].trimmed().toUpper();
         if (tciMode == m_lastTciMode) return;
         m_lastTciMode = tciMode;

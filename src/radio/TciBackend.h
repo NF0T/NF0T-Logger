@@ -54,6 +54,7 @@ private:
     bool    m_intentionalClose = false;
     bool    m_serverReady      = false;
     bool    m_transmitting     = false;
+    int     m_trackedTrx       = -1;   // latched from first vfo message; -1 = unset
     double  m_lastFreqHz       = 0.0;
     QString m_lastTciMode;
 };
