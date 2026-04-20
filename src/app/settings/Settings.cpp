@@ -146,7 +146,15 @@ void Settings::setHamlibRigModel(int v)     { put("radio/hamlib/rigmodel", v); }
 QString Settings::hamlibConnectionType() const { return get("radio/hamlib/conntype", QStringLiteral("serial")); }
 void Settings::setHamlibConnectionType(const QString &v){ put("radio/hamlib/conntype", v); }
 
-QString Settings::hamlibSerialDevice() const { return get("radio/hamlib/device", QStringLiteral("/dev/ttyUSB0")); }
+QString Settings::hamlibSerialDevice() const {
+#if defined(Q_OS_WIN)
+    return get("radio/hamlib/device", QStringLiteral("COM1"));
+#elif defined(Q_OS_MACOS)
+    return get("radio/hamlib/device", QStringLiteral("/dev/cu.usbserial-0"));
+#else
+    return get("radio/hamlib/device", QStringLiteral("/dev/ttyUSB0"));
+#endif
+}
 void Settings::setHamlibSerialDevice(const QString &v){ put("radio/hamlib/device", v); }
 
 int Settings::hamlibBaudRate() const        { return get("radio/hamlib/baud", 9600); }
