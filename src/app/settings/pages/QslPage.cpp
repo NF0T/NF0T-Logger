@@ -38,7 +38,13 @@ QslPage::QslPage(QWidget *parent)
     auto *lotwWidget = new QWidget;
     m_lotwEnabled         = new QCheckBox(tr("Enable LoTW integration"), lotwWidget);
     m_tqslPath            = new QLineEdit(lotwWidget);
-    m_tqslPath->setPlaceholderText("/usr/bin/tqsl");
+#if defined(Q_OS_WIN)
+    m_tqslPath->setPlaceholderText(tr("C:\\Program Files (x86)\\TQSL\\tqsl.exe"));
+#elif defined(Q_OS_MACOS)
+    m_tqslPath->setPlaceholderText(tr("/Applications/tqsl.app/Contents/MacOS/tqsl"));
+#else
+    m_tqslPath->setPlaceholderText(tr("/usr/bin/tqsl"));
+#endif
     m_lotwCallsign        = new QLineEdit(lotwWidget);
     m_lotwCallsign->setPlaceholderText(tr("Certificate callsign (for download login)"));
     m_lotwStationLocation = new QLineEdit(lotwWidget);

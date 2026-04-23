@@ -24,14 +24,17 @@ public:
 
 private slots:
     void onAddressChanged(const QString &text);
+    void onMulticastToggled(bool checked);
 
 private:
     void populateIfaceList();
 
-    QCheckBox  *m_enabled        = nullptr;
-    QSpinBox   *m_port           = nullptr;
-    QLineEdit  *m_multicastGroup = nullptr;
-    QCheckBox  *m_autoLog        = nullptr;
-    QGroupBox  *m_ifaceBox       = nullptr;
-    QListWidget *m_ifaceList     = nullptr;
+    QCheckBox   *m_enabled        = nullptr;
+    QSpinBox    *m_port           = nullptr;
+    QCheckBox   *m_useMulticast   = nullptr;
+    QGroupBox   *m_multicastBox   = nullptr;
+    QLineEdit   *m_multicastGroup = nullptr;
+    QCheckBox   *m_autoLog        = nullptr;
+    QGroupBox   *m_ifaceBox       = nullptr;
+    QListWidget *m_ifaceList      = nullptr;
 };

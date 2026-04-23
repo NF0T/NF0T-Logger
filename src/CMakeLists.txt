@@ -18,7 +18,9 @@ set(SOURCES
     core/Maidenhead.cpp
     ui/RadioPanel.cpp
     ui/entrypanel/QsoEntryPanel.cpp
+    ui/LogFilterBar.cpp
     ui/QsoEditDialog.cpp
+    ui/WhatsNewDialog.cpp
     ui/QslColumns.cpp
     ui/QslDownloadDialog.cpp
     ui/QslUploadDialog.cpp
@@ -56,7 +58,9 @@ set(HEADERS
     core/Maidenhead.h
     ui/RadioPanel.h
     ui/entrypanel/QsoEntryPanel.h
+    ui/LogFilterBar.h
     ui/QsoEditDialog.h
+    ui/WhatsNewDialog.h
     ui/QslColumns.h
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
