@@ -254,6 +254,9 @@ public:
     QByteArray splitterState() const;
     void       setSplitterState(const QByteArray &v);
 
+    QString lastSeenVersion() const;
+    void    setLastSeenVersion(const QString &v);
+
 signals:
     void changed();   // emitted after any value is written
 

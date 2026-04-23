@@ -49,6 +49,9 @@
 #include "ui/RadioPanel.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 #include "ui/QsoEditDialog.h"
+#include "ui/WhatsNewDialog.h"
+
+#include <algorithm>
 #include "ui/QslColumns.h"
 #include "ui/QslDownloadDialog.h"
 #include "ui/QslUploadDialog.h"
@@ -128,6 +131,12 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
+    // Show What's New on first launch after an upgrade (not on fresh install)
+    const QString current  = QStringLiteral(APP_VERSION);
+    const QString lastSeen = Settings::instance().lastSeenVersion();
+    Settings::instance().setLastSeenVersion(current);
+    if (!lastSeen.isEmpty() && lastSeen != current)
+        QTimer::singleShot(500, this, &MainWindow::onWhatsNew);
 }
 
 MainWindow::~MainWindow() = default;
@@ -222,6 +231,13 @@ void MainWindow::setupMenuBar()
 
     // --- Help ---
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
+
+    m_whatsNewAction = new QAction(tr("&What's New…"), this);
+    connect(m_whatsNewAction, &QAction::triggered, this, &MainWindow::onWhatsNew);
+    helpMenu->addAction(m_whatsNewAction);
+
+    helpMenu->addSeparator();
+
     m_aboutAction = new QAction(tr("&About NF0T Logger"), this);
     connect(m_aboutAction, &QAction::triggered, this, &MainWindow::onAbout);
     helpMenu->addAction(m_aboutAction);
@@ -247,7 +263,7 @@ void MainWindow::setupCentralWidget()
     qslHeader->setSectionResizeMode(QsoTableModel::ColName, QHeaderView::Stretch);
     m_logView->setAlternatingRowColors(true);
     m_logView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_logView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_logView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_logView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_logView->setSortingEnabled(false);
     m_logView->verticalHeader()->hide();
@@ -270,16 +286,35 @@ void MainWindow::setupCentralWidget()
             this, [this](const QPoint &pos) {
         const QModelIndex idx = m_logView->indexAt(pos);
         if (!idx.isValid()) return;
-        m_logView->selectionModel()->setCurrentIndex(idx, QItemSelectionModel::SelectCurrent | QItemSelectionModel::Rows);
+
+        // If the right-clicked row isn't already in the selection, switch to it.
+        const QModelIndexList selRows = m_logView->selectionModel()->selectedRows();
+        const bool clickedSelected = std::any_of(selRows.begin(), selRows.end(),
+            [&idx](const QModelIndex &si) { return si.row() == idx.row(); });
+        if (!clickedSelected)
+            m_logView->selectionModel()->setCurrentIndex(
+                idx, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+
+        const int selCount = m_logView->selectionModel()->selectedRows().size();
 
         QMenu menu(this);
-        QAction *editAct   = menu.addAction(tr("Edit QSO…"));
-        QAction *deleteAct = menu.addAction(tr("Delete QSO"));
-        const QAction *chosen = menu.exec(m_logView->viewport()->mapToGlobal(pos));
-        if (chosen == editAct)
-            onEditQso(idx);
-        else if (chosen == deleteAct)
-            onDeleteSelectedQso();
+        if (selCount <= 1) {
+            QAction *editAct   = menu.addAction(tr("Edit QSO…"));
+            QAction *deleteAct = menu.addAction(tr("Delete QSO"));
+            const QAction *chosen = menu.exec(m_logView->viewport()->mapToGlobal(pos));
+            if (chosen == editAct)
+                onEditQso(m_logView->currentIndex());
+            else if (chosen == deleteAct)
+                onDeleteSelectedQso();
+        } else {
+            QAction *deleteAct = menu.addAction(tr("Delete %1 QSOs…").arg(selCount));
+            QAction *exportAct = menu.addAction(tr("Export %1 QSOs to ADIF…").arg(selCount));
+            const QAction *chosen = menu.exec(m_logView->viewport()->mapToGlobal(pos));
+            if (chosen == deleteAct)
+                onDeleteSelectedQso();
+            else if (chosen == exportAct)
+                onExportSelectedQsos();
+        }
     });
 
     // Delete key shortcut
@@ -797,27 +832,94 @@ void MainWindow::onDeleteSelectedQso()
 {
     if (!m_db) return;
 
-    const QModelIndex idx = m_logView->currentIndex();
-    if (!idx.isValid()) return;
+    const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
+    if (selected.isEmpty()) return;
 
-    const int row = idx.row();
-    const Qso &q = m_logModel->qsoAt(row);
+    if (selected.size() == 1) {
+        const int row = selected.first().row();
+        const Qso &q  = m_logModel->qsoAt(row);
+        const auto reply = QMessageBox::question(
+            this, tr("Delete QSO"),
+            tr("Delete QSO with %1 on %2?\nThis cannot be undone.")
+                .arg(q.callsign, q.datetimeOn.toUTC().toString("yyyy-MM-dd HH:mm")),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (reply != QMessageBox::Yes) return;
 
-    const auto reply = QMessageBox::question(
-        this, tr("Delete QSO"),
-        tr("Delete QSO with %1 on %2?\nThis cannot be undone.")
-            .arg(q.callsign, q.datetimeOn.toUTC().toString("yyyy-MM-dd HH:mm")),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (auto r = m_db->deleteQso(q.id); !r) {
+            QMessageBox::warning(this, tr("Delete Failed"),
+                tr("Could not delete QSO:\n%1").arg(r.error()));
+            return;
+        }
+        m_logModel->removeQso(row);
+        updateQsoCount();
+        showStatusMessage(tr("QSO deleted: %1").arg(q.callsign), 3000);
+    } else {
+        const int count = selected.size();
+        const auto reply = QMessageBox::question(
+            this, tr("Delete QSOs"),
+            tr("Delete %1 selected QSO(s)?\nThis cannot be undone.").arg(count),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (reply != QMessageBox::Yes) return;
 
-    if (reply != QMessageBox::Yes) return;
+        QList<int> rows;
+        rows.reserve(count);
+        for (const QModelIndex &idx : selected)
+            rows << idx.row();
+        std::sort(rows.begin(), rows.end(), std::greater<int>());
 
-    if (auto r = m_db->deleteQso(q.id); !r) {
-        QMessageBox::warning(this, tr("Delete Failed"),
-            tr("Could not delete QSO:\n%1").arg(r.error()));
+        QStringList errors;
+        for (int row : rows) {
+            const Qso &q = m_logModel->qsoAt(row);
+            if (auto r = m_db->deleteQso(q.id); !r)
+                errors << r.error();
+            else
+                m_logModel->removeQso(row);
+        }
+        updateQsoCount();
+        if (errors.isEmpty())
+            showStatusMessage(tr("Deleted %1 QSO(s).").arg(count), 3000);
+        else
+            QMessageBox::warning(this, tr("Delete Failed"),
+                tr("Some QSOs could not be deleted:\n%1").arg(errors.join('\n')));
+    }
+}
+
+void MainWindow::onExportSelectedQsos()
+{
+    if (!m_db) return;
+
+    const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
+    if (selected.isEmpty()) return;
+
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export Selected QSOs"), QString(),
+        tr("ADIF Files (*.adi);;All Files (*)"));
+    if (path.isEmpty()) return;
+
+    QList<int> rows;
+    rows.reserve(selected.size());
+    for (const QModelIndex &idx : selected)
+        rows << idx.row();
+    std::sort(rows.begin(), rows.end());
+
+    QList<Qso> qsos;
+    qsos.reserve(rows.size());
+    for (int row : rows)
+        qsos << m_logModel->qsoAt(row);
+
+    AdifWriter::Options opts;
+    if (!AdifWriter::writeFile(path, qsos, opts)) {
+        QMessageBox::critical(this, tr("ADIF Export"),
+            tr("Failed to write file:\n%1").arg(path));
         return;
     }
 
-    m_logModel->removeQso(row);
-    updateQsoCount();
-    showStatusMessage(tr("QSO deleted: %1").arg(q.callsign), 3000);
+    QMessageBox::information(this, tr("ADIF Export"),
+        tr("Exported %1 contact(s) to:\n%2").arg(qsos.size()).arg(path));
+}
+
+void MainWindow::onWhatsNew()
+{
+    WhatsNewDialog dlg(QStringLiteral(APP_VERSION), this);
+    dlg.exec();
 }

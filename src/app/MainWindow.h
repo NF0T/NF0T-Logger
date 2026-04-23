@@ -49,6 +49,8 @@ private slots:
     void onQsoReady(const Qso &qso);
     void onEditQso(const QModelIndex &index);
     void onDeleteSelectedQso();
+    void onExportSelectedQsos();
+    void onWhatsNew();
     void onConnectHamlib();
     void onConnectTci();
     void onDisconnectRadio();
@@ -125,6 +127,7 @@ private:
     QAction *m_exitAction            = nullptr;
     QAction *m_settingsAction        = nullptr;
     QAction *m_aboutAction           = nullptr;
+    QAction *m_whatsNewAction        = nullptr;
     QAction *m_connectHamlibAction   = nullptr;
     QAction *m_connectTciAction      = nullptr;
     QAction *m_disconnectRadioAction = nullptr;

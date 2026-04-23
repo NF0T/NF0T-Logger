@@ -313,3 +313,6 @@ void Settings::setMainWindowState(const QByteArray &v) { put("ui/windowstate", v
 
 QByteArray Settings::splitterState() const             { return get("ui/splitter", QByteArray()); }
 void Settings::setSplitterState(const QByteArray &v)   { put("ui/splitter", v); }
+
+QString Settings::lastSeenVersion() const              { return get("ui/lastSeenVersion", QString()); }
+void Settings::setLastSeenVersion(const QString &v)    { put("ui/lastSeenVersion", v); }
