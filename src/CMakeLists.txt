@@ -19,7 +19,7 @@ set(SOURCES
     ui/RadioPanel.cpp
     ui/entrypanel/QsoQuickEntryPanel.cpp
     ui/LogFilterBar.cpp
-    ui/QsoEditDialog.cpp
+    ui/QsoFullEntryDialog.cpp
     ui/WhatsNewDialog.cpp
     ui/QslColumns.cpp
     ui/QslDownloadDialog.cpp
@@ -59,7 +59,7 @@ set(HEADERS
     ui/RadioPanel.h
     ui/entrypanel/QsoQuickEntryPanel.h
     ui/LogFilterBar.h
-    ui/QsoEditDialog.h
+    ui/QsoFullEntryDialog.h
     ui/WhatsNewDialog.h
     ui/QslColumns.h
     ui/QslDownloadDialog.h

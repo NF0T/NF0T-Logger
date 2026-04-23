@@ -48,7 +48,7 @@
 #include "radio/TciBackend.h"
 #include "ui/RadioPanel.h"
 #include "ui/entrypanel/QsoQuickEntryPanel.h"
-#include "ui/QsoEditDialog.h"
+#include "ui/QsoFullEntryDialog.h"
 #include "ui/LogFilterBar.h"
 #include "ui/WhatsNewDialog.h"
 
@@ -318,6 +318,25 @@ void MainWindow::setupCentralWidget()
 
     connect(m_entryPanel, &QsoQuickEntryPanel::qsoReady,
             this, &MainWindow::onQsoReady);
+
+    connect(m_entryPanel, &QsoQuickEntryPanel::fullEntryRequested,
+            this, [this](Qso partial) {
+        // Pre-populate station fields from settings so the Full Entry dialog
+        // shows sensible defaults — the user can still override them in the dialog.
+        const Settings &s = Settings::instance();
+        if (partial.stationCallsign.isEmpty()) partial.stationCallsign = s.stationCallsign();
+        if (partial.antenna.isEmpty())         partial.antenna          = s.equipmentAntenna();
+        if (partial.rig.isEmpty())             partial.rig              = s.equipmentRig();
+        if (!partial.txPwr.has_value()) {
+            const double pwr = s.equipmentTxPwr();
+            if (pwr > 0.0) partial.txPwr = pwr;
+        }
+
+        QsoFullEntryDialog dlg(partial, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+        onQsoReady(dlg.qso());
+        m_entryPanel->clearForm();
+    });
 
     auto *escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     connect(escShortcut, &QShortcut::activated,
@@ -813,10 +832,11 @@ void MainWindow::onEditQso(const QModelIndex &index)
     const int row = index.row();
     const Qso original = m_logModel->qsoAt(row);
 
-    QsoEditDialog dlg(original, this);
+    QsoFullEntryDialog dlg(original, this);
     if (dlg.exec() != QDialog::Accepted) return;
 
     Qso updated = dlg.qso();
+    enrichQso(updated);
     if (auto r = m_db->updateQso(updated); !r) {
         QMessageBox::warning(this, tr("Edit Failed"),
             tr("Could not save changes:\n%1").arg(r.error()));

@@ -13,6 +13,7 @@ class QAction;
 class QLabel;
 class QTableView;
 
+class QsoFullEntryDialog;
 class ClubLogService;
 class DatabaseInterface;
 class DigitalListenerService;
