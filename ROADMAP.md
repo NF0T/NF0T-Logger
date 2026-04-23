@@ -4,48 +4,6 @@ This document captures planned features and enhancements. Items are grouped by m
 
 ---
 
-## v0.2.0 — Multi-Select, Bulk Actions, and Log Filtering
-
-### Multi-select in the main log table
-
-The main QSO table will support standard multi-row selection:
-
-- **Shift+click** — selects a contiguous range from the first selected row through the clicked row
-- **Ctrl+click** — adds or removes individual rows from the selection
-
-### Bulk action context menu
-
-A right-click context menu on any selected row will offer actions that apply to all selected QSOs:
-
-- **Delete selected** — removes all selected QSOs after confirmation
-- **Export to ADIF** — writes all selected QSOs to a user-chosen `.adi` file
-
-The context menu is designed to be extended with additional bulk actions in future milestones.
-
-### Log filter bar
-
-A compact filter bar above the log table wires up the existing `QsoFilter` infrastructure (already implemented at the database layer) into a live UI. All active controls compose with AND logic.
-
-- **Callsign** — free-text substring match; updates the table as you type (debounced)
-- **Band** — drop-down; "All bands" clears the filter
-- **Mode** — drop-down; "All modes" clears the filter
-- **Date range** — from/to date pickers (UTC); either bound may be left blank ("Any")
-- **QSL status** — drop-down with unsent and pending-confirmation states for LoTW, eQSL, QRZ, and ClubLog
-- **Clear** button — resets all controls and returns to the full log view
-
-When a filter is active the status bar shows **"QSOs: X of Y"** so the total log size is always visible.
-
-### "What's New" dialog
-
-A modal dialog shown once on the first launch after an upgrade, displaying the release notes for the newly installed version.
-
-- Release notes are fetched at launch from the **GitHub Releases API** for the installed version tag, so the release drafter output serves as the content automatically — no separate changelog file to maintain.
-- The dialog is shown only once per version; a dismissed version is recorded in settings so it does not reappear.
-- A **Help → What's New** menu item allows the user to re-open the dialog at any time.
-- If the fetch fails (no network, GitHub unavailable), the dialog is silently skipped; it does not block startup.
-
----
-
 ## v0.3.0 — Revamped QSO Entry Panel
 
 The current QSO entry panel will be replaced entirely with a two-column split layout that sits between the radio status bar and the main log table.
