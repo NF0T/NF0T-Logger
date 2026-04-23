@@ -4,7 +4,7 @@ This document captures planned features and enhancements. Items are grouped by m
 
 ---
 
-## v0.2.0 — Multi-Select and Bulk Actions
+## v0.2.0 — Multi-Select, Bulk Actions, and Log Filtering
 
 ### Multi-select in the main log table
 
@@ -21,6 +21,19 @@ A right-click context menu on any selected row will offer actions that apply to 
 - **Export to ADIF** — writes all selected QSOs to a user-chosen `.adi` file
 
 The context menu is designed to be extended with additional bulk actions in future milestones.
+
+### Log filter bar
+
+A compact filter bar above the log table wires up the existing `QsoFilter` infrastructure (already implemented at the database layer) into a live UI. All active controls compose with AND logic.
+
+- **Callsign** — free-text substring match; updates the table as you type (debounced)
+- **Band** — drop-down; "All bands" clears the filter
+- **Mode** — drop-down; "All modes" clears the filter
+- **Date range** — from/to date pickers (UTC); either bound may be left blank ("Any")
+- **QSL status** — drop-down with unsent and pending-confirmation states for LoTW, eQSL, QRZ, and ClubLog
+- **Clear** button — resets all controls and returns to the full log view
+
+When a filter is active the status bar shows **"QSOs: X of Y"** so the total log size is always visible.
 
 ### "What's New" dialog
 
@@ -105,7 +118,7 @@ The dialog pre-populates from the quick-entry panel when launched from the panel
 
 ---
 
-## Supporting infrastructure (v0.2.0–v0.3.0)
+## Supporting infrastructure (v0.3.0)
 
 ### Callsign validation and parsing
 
@@ -120,32 +133,7 @@ This class will be used by the entry form, the lookup trigger, and the duplicate
 
 ---
 
-## v0.4.0 — Log Search and Filtering
-
-The main log table will gain a toolbar with live filtering controls, wiring up the existing `QsoFilter` infrastructure that is already implemented at the database layer but not yet exposed in the UI.
-
-### Filter bar
-
-A compact toolbar above the log table with the following controls:
-
-- **Callsign** — free-text substring match against the `CALL` field; updates the table as you type (debounced)
-- **Band** — drop-down populated from bands present in the log; "All" clears the filter
-- **Mode** — drop-down populated from modes present in the log; "All" clears the filter
-- **Date range** — from/to date pickers (UTC); either bound may be left blank
-- **Clear** button — resets all filters and returns to the full log view
-
-All active filters compose with AND logic, matching the existing `QsoFilter` struct.
-
-### QSL status filters
-
-An additional filter group for QSL confirmation state — useful for finding QSOs that still need uploading or are awaiting confirmation:
-
-- Unsent to LoTW / eQSL / QRZ / ClubLog
-- Sent but not yet confirmed (pending) for each service
-
----
-
-## v0.5.0 — New Log / Log Rotation
+## v0.4.0 — New Log / Log Rotation
 
 Implements the **File → New Log** menu item, which currently shows a placeholder dialog.
 
@@ -167,7 +155,6 @@ The schema (tables, migrations) is preserved; only QSO records are removed. This
 
 These are ideas that have been discussed but not yet scoped:
 
-- **Main log table callsign filter** — highlight or filter the log table to show only QSOs with the currently entered callsign (may be folded into v0.4.0 filter bar)
 - **Additional bulk actions** — e.g. bulk QSL upload, bulk re-export
 - **Additional callsign lookup providers** — Hamcall, FCC ULS, national licensing databases
 - **Log4OM-style contact tabs** — separate tabs for all contacts vs. recent contacts with a given station

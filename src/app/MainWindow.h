@@ -22,6 +22,7 @@ class HamlibBackend;
 class LoTwService;
 class QrzService;
 class QslService;
+class LogFilterBar;
 class QsoEntryPanel;
 class RadioPanel;
 class QsoTableModel;
@@ -105,6 +106,7 @@ private:
 
     // Central layout
     RadioPanel    *m_radioPanel = nullptr;
+    LogFilterBar  *m_filterBar  = nullptr;
     QSplitter     *m_splitter   = nullptr;
     QTableView    *m_logView    = nullptr;
     QsoEntryPanel *m_entryPanel = nullptr;

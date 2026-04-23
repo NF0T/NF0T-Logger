@@ -32,6 +32,7 @@
 #include "app/settings/SettingsDialog.h"
 #include "wsjtx/WsjtxService.h"
 #include "core/adif/AdifParser.h"
+#include "core/logbook/QsoFilter.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
 #include "core/Maidenhead.h"
@@ -49,6 +50,7 @@
 #include "ui/RadioPanel.h"
 #include "ui/entrypanel/QsoEntryPanel.h"
 #include "ui/QsoEditDialog.h"
+#include "ui/LogFilterBar.h"
 #include "ui/WhatsNewDialog.h"
 
 #include <algorithm>
@@ -334,11 +336,16 @@ void MainWindow::setupCentralWidget()
     m_splitter->setStretchFactor(0, 3);
     m_splitter->setStretchFactor(1, 1);
 
+    m_filterBar = new LogFilterBar(this);
+    connect(m_filterBar, &LogFilterBar::filterChanged,
+            this, [this]() { reloadLog(); });
+
     auto *container = new QWidget(this);
     auto *vbox = new QVBoxLayout(container);
     vbox->setContentsMargins(0, 0, 0, 0);
     vbox->setSpacing(0);
     vbox->addWidget(m_radioPanel);
+    vbox->addWidget(m_filterBar);
     vbox->addWidget(m_splitter);
     setCentralWidget(container);
 }
@@ -447,7 +454,8 @@ void MainWindow::openDefaultDatabase()
 void MainWindow::reloadLog()
 {
     if (!m_db) return;
-    if (auto r = m_db->fetchQsos())
+    const QsoFilter filter = m_filterBar ? m_filterBar->currentFilter() : QsoFilter{};
+    if (auto r = m_db->fetchQsos(filter))
         m_logModel->setQsos(*r);
     updateQsoCount();
 }
@@ -455,8 +463,11 @@ void MainWindow::reloadLog()
 void MainWindow::updateQsoCount()
 {
     if (!m_db) return;
-    const int n = m_db->qsoCount().value_or(0);
-    m_qsoCountLabel->setText(tr("QSOs: %1").arg(n));
+    const int total = m_db->qsoCount().value_or(0);
+    if (m_filterBar && m_filterBar->isFiltered())
+        m_qsoCountLabel->setText(tr("QSOs: %1 of %2").arg(m_logModel->rowCount()).arg(total));
+    else
+        m_qsoCountLabel->setText(tr("QSOs: %1").arg(total));
 }
 
 // ---------------------------------------------------------------------------
