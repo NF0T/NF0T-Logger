@@ -109,6 +109,44 @@ The schema (tables, migrations) is preserved; only QSO records are removed. This
 
 ---
 
+## vX.X.0 — Release Packaging and Distribution
+
+Produce signed, self-contained installer/image artifacts and attach them to every GitHub release.
+
+### Windows installer (NSIS via CPack)
+
+1. Add `install()` rules and a CPack block to `CMakeLists.txt`
+2. In the release CI job, run `windeployqt6 --dir staging/ NF0T-Logger.exe` to collect Qt DLLs, SQL driver, TLS backend, and image format plugins into a staging directory
+3. Run `cmake --build --target package` with the CPack NSIS generator to produce `NF0T-Logger-<version>-win64.exe`
+
+Note: this is a community GPG-signed installer, not a Microsoft Authenticode-signed one. Windows SmartScreen will warn on first run; Authenticode signing requires a paid EV certificate.
+
+### Linux AppImage
+
+1. Add a `.desktop` file and application icon to the repository
+2. In the release CI job, use **linuxdeploy** with its Qt plugin to bundle the binary and all Qt libraries:
+   ```
+   linuxdeploy --appdir AppDir --executable NF0T-Logger --plugin qt --output appimage
+   ```
+3. Produces `NF0T-Logger-x86_64.AppImage` — no installation required
+
+### GPG signing
+
+Both artifacts (and any future macOS `.dmg`) are signed with a detached ASCII-armored signature:
+
+```
+gpg --detach-sign --armor NF0T-Logger-<version>-win64.exe
+gpg --detach-sign --armor NF0T-Logger-x86_64.AppImage
+```
+
+The `.asc` files are uploaded alongside the binaries as release assets. The public key will be published to a keyserver and linked from the README. Users verify with `gpg --verify <file>.asc <file>`.
+
+### CI release workflow
+
+A new `.github/workflows/release.yml` triggers on `v*` tag pushes (separate from the existing build CI). It runs the Windows and Linux package jobs, imports the GPG key from a repository secret (`GPG_PRIVATE_KEY` + `GPG_PASSPHRASE`), signs both artifacts, and uploads them to the GitHub release via `gh release upload`.
+
+---
+
 ## Future / under consideration
 
 These are ideas that have been discussed but not yet scoped:
