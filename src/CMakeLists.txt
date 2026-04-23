@@ -64,6 +64,8 @@ set(HEADERS
     ui/QslColumns.h
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
+    lookup/CallsignLookupResult.h
+    lookup/CallsignLookupProvider.h
     radio/DigitalListenerService.h
     radio/HamlibBackend.h
     radio/RadioBackend.h

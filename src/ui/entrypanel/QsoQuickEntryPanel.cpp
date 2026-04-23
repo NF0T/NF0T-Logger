@@ -19,6 +19,7 @@
 
 #include "app/settings/Settings.h"
 #include "core/BandPlan.h"
+#include "lookup/CallsignLookupResult.h"
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -290,6 +291,45 @@ void QsoQuickEntryPanel::setDxCall(const QString &call)
 void QsoQuickEntryPanel::setDxGrid(const QString &grid)
 {
     m_dxGrid = grid.toUpper();
+}
+
+void QsoQuickEntryPanel::setLookupStatus(const QString &status)
+{
+    m_lookupLabel->setText(status);
+}
+
+void QsoQuickEntryPanel::setLookupResult(const CallsignLookupResult &result)
+{
+    if (result.callsign.isEmpty()) {
+        m_lookupLabel->setText(tr("No data found."));
+        return;
+    }
+
+    QStringList lines;
+    if (!result.name.isEmpty())
+        lines << result.name;
+
+    QStringList loc;
+    if (!result.qth.isEmpty())   loc << result.qth;
+    if (!result.state.isEmpty()) loc << result.state;
+    if (!result.country.isEmpty()) loc << result.country;
+    if (!loc.isEmpty())
+        lines << loc.join(QStringLiteral(", "));
+
+    if (!result.gridsquare.isEmpty())
+        lines << tr("Grid: %1").arg(result.gridsquare);
+
+    QStringList dxInfo;
+    if (result.dxcc > 0)    dxInfo << tr("DXCC %1").arg(result.dxcc);
+    if (result.cqZone > 0)  dxInfo << tr("CQ %1").arg(result.cqZone);
+    if (result.ituZone > 0) dxInfo << tr("ITU %1").arg(result.ituZone);
+    if (!dxInfo.isEmpty())
+        lines << dxInfo.join(QStringLiteral("  "));
+
+    if (!result.licenseClass.isEmpty())
+        lines << tr("Class: %1").arg(result.licenseClass);
+
+    m_lookupLabel->setText(lines.join(QStringLiteral("\n")));
 }
 
 void QsoQuickEntryPanel::setPreviousQsos(const QList<Qso> &qsos, int total)

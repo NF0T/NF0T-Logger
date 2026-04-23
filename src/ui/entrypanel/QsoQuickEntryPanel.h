@@ -4,6 +4,7 @@
 
 #include <QWidget>
 #include "core/logbook/Qso.h"
+#include "lookup/CallsignLookupResult.h"
 
 class QComboBox;
 class QDateTimeEdit;
@@ -34,6 +35,10 @@ public:
 
     // Called by MainWindow with DB results for the current callsign (step 7).
     void setPreviousQsos(const QList<Qso> &qsos, int total);
+
+    // Called by MainWindow when a callsign lookup is in progress or completes (step 6).
+    void setLookupStatus(const QString &status);
+    void setLookupResult(const CallsignLookupResult &result);
 
 public slots:
     void clearForm();
