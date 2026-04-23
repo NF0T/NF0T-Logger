@@ -62,7 +62,6 @@ LogFilterBar::LogFilterBar(QWidget *parent)
     m_qslStatus->addItem(tr("QRZ — unsent"));
     m_qslStatus->addItem(tr("QRZ — pending"));
     m_qslStatus->addItem(tr("ClubLog — unsent"));
-    m_qslStatus->addItem(tr("ClubLog — pending"));
 
     m_clearBtn = new QPushButton(tr("Clear"), this);
     m_clearBtn->setFixedWidth(55);
@@ -141,7 +140,6 @@ QsoFilter LogFilterBar::currentFilter() const
     case 5: f.qrzUnsent      = true; break;
     case 6: f.qrzPending     = true; break;
     case 7: f.clublogUnsent  = true; break;
-    case 8: f.clublogPending = true; break;
     default: break;
     }
 
@@ -162,8 +160,7 @@ bool LogFilterBar::isFiltered() const
         || f.eqslPending.has_value()
         || f.qrzUnsent.has_value()
         || f.qrzPending.has_value()
-        || f.clublogUnsent.has_value()
-        || f.clublogPending.has_value();
+        || f.clublogUnsent.has_value();
 }
 
 void LogFilterBar::reset()
