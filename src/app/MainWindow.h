@@ -11,7 +11,6 @@
 
 class QAction;
 class QLabel;
-class QSplitter;
 class QTableView;
 
 class ClubLogService;
@@ -23,7 +22,7 @@ class LoTwService;
 class QrzService;
 class QslService;
 class LogFilterBar;
-class QsoEntryPanel;
+class QsoQuickEntryPanel;
 class RadioPanel;
 class QsoTableModel;
 class RadioBackend;
@@ -105,11 +104,10 @@ private:
     QList<DigitalListenerService*> m_digitalListeners;
 
     // Central layout
-    RadioPanel    *m_radioPanel = nullptr;
-    LogFilterBar  *m_filterBar  = nullptr;
-    QSplitter     *m_splitter   = nullptr;
-    QTableView    *m_logView    = nullptr;
-    QsoEntryPanel *m_entryPanel = nullptr;
+    RadioPanel           *m_radioPanel = nullptr;
+    QsoQuickEntryPanel   *m_entryPanel = nullptr;
+    LogFilterBar         *m_filterBar  = nullptr;
+    QTableView           *m_logView    = nullptr;
 
     // Status bar
     QLabel *m_hamlibIndicator  = nullptr;

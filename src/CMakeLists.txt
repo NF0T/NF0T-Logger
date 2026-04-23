@@ -17,7 +17,7 @@ set(SOURCES
     core/BandPlan.cpp
     core/Maidenhead.cpp
     ui/RadioPanel.cpp
-    ui/entrypanel/QsoEntryPanel.cpp
+    ui/entrypanel/QsoQuickEntryPanel.cpp
     ui/LogFilterBar.cpp
     ui/QsoEditDialog.cpp
     ui/WhatsNewDialog.cpp
@@ -57,7 +57,7 @@ set(HEADERS
     core/BandPlan.h
     core/Maidenhead.h
     ui/RadioPanel.h
-    ui/entrypanel/QsoEntryPanel.h
+    ui/entrypanel/QsoQuickEntryPanel.h
     ui/LogFilterBar.h
     ui/QsoEditDialog.h
     ui/WhatsNewDialog.h

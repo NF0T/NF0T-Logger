@@ -10,7 +10,6 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
@@ -48,7 +47,7 @@
 #include "radio/RadioBackend.h"
 #include "radio/TciBackend.h"
 #include "ui/RadioPanel.h"
-#include "ui/entrypanel/QsoEntryPanel.h"
+#include "ui/entrypanel/QsoQuickEntryPanel.h"
 #include "ui/QsoEditDialog.h"
 #include "ui/LogFilterBar.h"
 #include "ui/WhatsNewDialog.h"
@@ -154,8 +153,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     Settings::instance().setMainWindowGeometry(saveGeometry());
     Settings::instance().setMainWindowState(saveState());
-    if (m_splitter)
-        Settings::instance().setSplitterState(m_splitter->saveState());
     QMainWindow::closeEvent(event);
 }
 
@@ -248,12 +245,10 @@ void MainWindow::setupMenuBar()
 void MainWindow::setupCentralWidget()
 {
     m_radioPanel = new RadioPanel(this);
+    m_entryPanel = new QsoQuickEntryPanel(this);
 
-    m_splitter = new QSplitter(Qt::Vertical, this);
-
-    // Log table (top pane)
     m_logModel = new QsoTableModel(this);
-    m_logView  = new QTableView(m_splitter);
+    m_logView  = new QTableView(this);
 
     // Install grouped QSL header before setting the model
     auto *qslHeader = new QslGroupHeaderView(Qt::Horizontal, m_logView);
@@ -278,7 +273,6 @@ void MainWindow::setupCentralWidget()
         m_logView->setColumnWidth(c, 24);
     }
 
-    // Double-click to edit
     connect(m_logView, &QTableView::doubleClicked,
             this, &MainWindow::onEditQso);
 
@@ -319,22 +313,15 @@ void MainWindow::setupCentralWidget()
         }
     });
 
-    // Delete key shortcut
     auto *deleteShortcut = new QShortcut(QKeySequence::Delete, m_logView);
     connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::onDeleteSelectedQso);
 
-    // Bottom pane — QSO entry panel
-    m_entryPanel = new QsoEntryPanel(m_splitter);
-    connect(m_entryPanel, &QsoEntryPanel::qsoReady, this, &MainWindow::onQsoReady);
+    connect(m_entryPanel, &QsoQuickEntryPanel::qsoReady,
+            this, &MainWindow::onQsoReady);
 
-    // Escape anywhere in the main window resets the entry panel
     auto *escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
-    connect(escShortcut, &QShortcut::activated, m_entryPanel, &QsoEntryPanel::clearForm);
-
-    m_splitter->addWidget(m_logView);
-    m_splitter->addWidget(m_entryPanel);
-    m_splitter->setStretchFactor(0, 3);
-    m_splitter->setStretchFactor(1, 1);
+    connect(escShortcut, &QShortcut::activated,
+            m_entryPanel, &QsoQuickEntryPanel::clearForm);
 
     m_filterBar = new LogFilterBar(this);
     connect(m_filterBar, &LogFilterBar::filterChanged,
@@ -345,8 +332,9 @@ void MainWindow::setupCentralWidget()
     vbox->setContentsMargins(0, 0, 0, 0);
     vbox->setSpacing(0);
     vbox->addWidget(m_radioPanel);
+    vbox->addWidget(m_entryPanel);
     vbox->addWidget(m_filterBar);
-    vbox->addWidget(m_splitter);
+    vbox->addWidget(m_logView, 1);
     setCentralWidget(container);
 }
 
@@ -659,11 +647,11 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
     QLabel *indicator = (backend == m_hamlibBackend) ? m_hamlibIndicator : m_tciIndicator;
 
     connect(backend, &RadioBackend::freqChanged,
-            m_entryPanel, &QsoEntryPanel::setRadioFreq);
+            m_entryPanel, &QsoQuickEntryPanel::setRadioFreq);
     connect(backend, &RadioBackend::freqChanged,
             m_radioPanel, &RadioPanel::setFrequency);
     connect(backend, &RadioBackend::modeChanged,
-            m_entryPanel, &QsoEntryPanel::setRadioMode);
+            m_entryPanel, &QsoQuickEntryPanel::setRadioMode);
     connect(backend, &RadioBackend::transmitChanged,
             m_radioPanel, &RadioPanel::setTransmitting);
 
@@ -730,7 +718,7 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
     });
 
     connect(svc, &DigitalListenerService::cleared,
-            m_entryPanel, &QsoEntryPanel::clearForm);
+            m_entryPanel, &QsoQuickEntryPanel::clearForm);
 
     connect(svc, &DigitalListenerService::qsoLogged,
             this, [this](const Qso &qso) {
