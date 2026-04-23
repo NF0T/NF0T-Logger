@@ -46,8 +46,8 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
 
     m_callsign = new QLineEdit(this);
     m_callsign->setPlaceholderText(tr("Callsign"));
-    m_callsign->setMaxLength(20);
-    m_callsign->setMinimumWidth(110);
+    m_callsign->setMaxLength(15);   // AAA/BB1CCC/EEE = 14 chars; 15 covers edge cases
+    m_callsign->setFixedWidth(125);
     m_callsign->setToolTip(tr("Contacted station callsign"));
     connect(m_callsign, &QLineEdit::textChanged, this, [this](const QString &t) {
         const QString upper = t.toUpper();
@@ -85,7 +85,7 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
             this, &QsoQuickEntryPanel::onModeChanged);
 
     m_submode = new QComboBox(this);
-    m_submode->setFixedWidth(70);
+    m_submode->setFixedWidth(80);
     m_submode->setToolTip(tr("Submode"));
 
     m_rstSent = new QLineEdit(this);
@@ -136,14 +136,21 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
         return f;
     };
 
+    // Row 1: datetime + callsign + RST  (the fields typed most often in sequence)
     auto *row1 = new QHBoxLayout;
     row1->addWidget(new QLabel(tr("UTC:"), this));
     row1->addWidget(m_dateTime);
     row1->addWidget(m_nowBtn);
     row1->addWidget(makeSep());
     row1->addWidget(new QLabel(tr("Call:"), this));
-    row1->addWidget(m_callsign, 1);
+    row1->addWidget(m_callsign);
+    row1->addWidget(makeSep());
+    row1->addWidget(new QLabel(tr("RST S/R:"), this));
+    row1->addWidget(m_rstSent);
+    row1->addWidget(m_rstRcvd);
+    row1->addStretch();
 
+    // Row 2: band / freq / mode  (usually auto-filled from radio)
     auto *row2 = new QHBoxLayout;
     row2->addWidget(new QLabel(tr("Band:"), this));
     row2->addWidget(m_band);
@@ -155,19 +162,14 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     row2->addWidget(m_submode);
     row2->addStretch();
 
+    // Row 3: comment + action buttons
     auto *row3 = new QHBoxLayout;
-    row3->addWidget(new QLabel(tr("RST S/R:"), this));
-    row3->addWidget(m_rstSent);
-    row3->addWidget(m_rstRcvd);
-    row3->addWidget(makeSep());
     row3->addWidget(new QLabel(tr("Comment:"), this));
     row3->addWidget(m_comment, 1);
-
-    auto *row4 = new QHBoxLayout;
-    row4->addWidget(m_fullEntryBtn);
-    row4->addStretch();
-    row4->addWidget(m_logBtn);
-    row4->addWidget(m_clearBtn);
+    row3->addWidget(makeSep());
+    row3->addWidget(m_fullEntryBtn);
+    row3->addWidget(m_logBtn);
+    row3->addWidget(m_clearBtn);
 
     auto *leftForm = new QWidget(this);
     auto *leftLayout = new QVBoxLayout(leftForm);
@@ -176,14 +178,13 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     leftLayout->addLayout(row1);
     leftLayout->addLayout(row2);
     leftLayout->addLayout(row3);
-    leftLayout->addLayout(row4);
 
-    setTabOrder(m_callsign, m_band);
+    setTabOrder(m_callsign, m_rstSent);
+    setTabOrder(m_rstSent,  m_rstRcvd);
+    setTabOrder(m_rstRcvd,  m_band);
     setTabOrder(m_band,     m_freq);
     setTabOrder(m_freq,     m_mode);
-    setTabOrder(m_mode,     m_rstSent);
-    setTabOrder(m_rstSent,  m_rstRcvd);
-    setTabOrder(m_rstRcvd,  m_comment);
+    setTabOrder(m_mode,     m_comment);
     setTabOrder(m_comment,  m_logBtn);
 
     // -----------------------------------------------------------------------
