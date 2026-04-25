@@ -14,7 +14,7 @@ class SettingsDialog : public QDialog
     Q_OBJECT
 
 public:
-    enum Page { Station = 0, Equipment, Database, Radio, QslServices };
+    enum Page { Station = 0, Equipment, Database, Radio, QslServices, CallsignLookup };
 
     explicit SettingsDialog(QWidget *parent = nullptr);
 

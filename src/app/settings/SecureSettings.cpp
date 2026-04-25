@@ -15,6 +15,7 @@ const QStringList &SecureSettings::knownKeys()
         SecureKey::CLUBLOG_PASSWORD,
         SecureKey::CLUBLOG_APP_KEY,
         SecureKey::LOTW_PASSWORD,
+        SecureKey::QRZ_XML_PASSWORD,
     };
     return keys;
 }

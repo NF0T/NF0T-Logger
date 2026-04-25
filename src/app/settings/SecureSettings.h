@@ -61,4 +61,5 @@ namespace SecureKey {
     inline constexpr const char *CLUBLOG_PASSWORD     = "clublog/password";
     inline constexpr const char *CLUBLOG_APP_KEY      = "clublog/appkey";
     inline constexpr const char *LOTW_PASSWORD        = "lotw/password";
+    inline constexpr const char *QRZ_XML_PASSWORD     = "lookup/qrzxml/password";
 }

@@ -302,6 +302,19 @@ void Settings::setWsjtxMulticastIfaces(const QStringList &v) {
 }
 
 // ---------------------------------------------------------------------------
+// Callsign lookup
+// ---------------------------------------------------------------------------
+
+bool Settings::callsignLookupEnabled() const        { return get("lookup/enabled", false); }
+void Settings::setCallsignLookupEnabled(bool v)     { put("lookup/enabled", v); }
+
+QString Settings::qrzXmlUsername() const            { return get("lookup/qrzxml/username", QString()); }
+void Settings::setQrzXmlUsername(const QString &v)  { put("lookup/qrzxml/username", v); }
+
+QString Settings::qrzXmlPassword() const            { return SecureSettings::instance().get(SecureKey::QRZ_XML_PASSWORD); }
+void Settings::setQrzXmlPassword(const QString &v)  { SecureSettings::instance().set(SecureKey::QRZ_XML_PASSWORD, v); }
+
+// ---------------------------------------------------------------------------
 // UI state
 // ---------------------------------------------------------------------------
 

@@ -17,6 +17,7 @@
 #include "pages/QslPage.h"
 #include "pages/DisplayPage.h"
 #include "pages/WsjtxPage.h"
+#include "pages/CallsignLookupPage.h"
 
 SettingsDialog::SettingsDialog(QWidget *parent)
     : QDialog(parent)
@@ -47,6 +48,7 @@ SettingsDialog::SettingsDialog(QWidget *parent)
     addPage(new QslPage(this));
     addPage(new WsjtxPage(this));
     addPage(new DisplayPage(this));
+    addPage(new CallsignLookupPage(this));
 
     // Load all pages from current settings
     for (SettingsPage *p : m_pages)
