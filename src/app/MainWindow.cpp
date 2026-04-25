@@ -32,6 +32,7 @@
 #include "wsjtx/WsjtxService.h"
 #include "core/adif/AdifParser.h"
 #include "core/logbook/QsoFilter.h"
+#include "database/DatabaseInterface.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
 #include "core/Maidenhead.h"
@@ -49,6 +50,10 @@
 #include "ui/RadioPanel.h"
 #include "ui/entrypanel/QsoQuickEntryPanel.h"
 #include "ui/QsoFullEntryDialog.h"
+#include "lookup/CallsignLookupProvider.h"
+#include "lookup/CallsignLookupResult.h"
+#include "lookup/QrzXmlLookupProvider.h"
+#include "core/Callsign.h"
 #include "ui/LogFilterBar.h"
 #include "ui/WhatsNewDialog.h"
 
@@ -68,6 +73,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenuBar();
     setupCentralWidget();
     setupStatusBar();
+    wireCallsignLookup();
 
     // Restore window geometry before showing
     const QByteArray geo   = Settings::instance().mainWindowGeometry();
@@ -753,6 +759,64 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
 
     if (svc->isEnabled())
         svc->start();
+}
+
+void MainWindow::wireCallsignLookup()
+{
+    m_lookupProvider      = new QrzXmlLookupProvider(this);
+    m_callsignLookupTimer = new QTimer(this);
+    m_callsignLookupTimer->setSingleShot(true);
+    m_callsignLookupTimer->setInterval(600);
+
+    connect(m_entryPanel, &QsoQuickEntryPanel::callsignChanged,
+            this, [this](const QString &callsign) {
+        m_pendingLookupCallsign = callsign;
+        if (!Callsign::isValid(callsign)) {
+            m_callsignLookupTimer->stop();
+            return;
+        }
+        m_callsignLookupTimer->start();   // restarts the debounce window
+    });
+
+    connect(m_callsignLookupTimer, &QTimer::timeout, this, [this]() {
+        const QString typed = m_pendingLookupCallsign;
+        if (!Callsign::isValid(typed)) return;
+
+        const Callsign cs(typed);
+
+        // Network lookup — use base callsign so "VE3/W1AW/P" looks up W1AW
+        if (m_lookupProvider->isAvailable()) {
+            m_entryPanel->setLookupStatus(tr("Looking up %1…").arg(cs.base()));
+            m_lookupProvider->lookup(cs.base());
+        }
+
+        // Previous QSOs — exact match on typed callsign, real total count
+        if (m_db && m_db->isOpen()) {
+            QsoFilter f;
+            f.exactCall = typed;
+            f.limit     = 5;
+            if (auto res = m_db->fetchQsos(f)) {
+                int total = static_cast<int>(res->size());
+                QsoFilter cf;
+                cf.exactCall = typed;
+                if (auto cnt = m_db->countQsos(cf))
+                    total = *cnt;
+                m_entryPanel->setPreviousQsos(*res, total);
+            }
+        }
+    });
+
+    connect(m_lookupProvider, &CallsignLookupProvider::resultReady,
+            this, [this](const QString &callsign, const CallsignLookupResult &result) {
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) == 0)
+            m_entryPanel->setLookupResult(result);
+    });
+
+    connect(m_lookupProvider, &CallsignLookupProvider::lookupFailed,
+            this, [this](const QString &callsign, const QString &error) {
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) == 0)
+            m_entryPanel->setLookupStatus(tr("Lookup failed: %1").arg(error));
+    });
 }
 
 // ---------------------------------------------------------------------------

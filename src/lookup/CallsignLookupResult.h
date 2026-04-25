@@ -29,7 +29,8 @@ struct CallsignLookupResult
     std::optional<double> lon;
     QString licenseClass;   // e.g. "Extra", "General", "Technician"
     QString email;
-    QString url;            // biography / image URL
+    QString url;            // biography URL
+    QString imageUrl;       // profile photo URL (display only — not persisted)
 };
 
 Q_DECLARE_METATYPE(CallsignLookupResult)

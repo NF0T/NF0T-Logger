@@ -12,8 +12,10 @@
 class QAction;
 class QLabel;
 class QTableView;
+class QTimer;
 
 class QsoFullEntryDialog;
+class QrzXmlLookupProvider;
 class ClubLogService;
 class DatabaseInterface;
 class DigitalListenerService;
@@ -79,6 +81,9 @@ private:
     // Wire a digital listener's signals to the entry panel and auto-log logic.
     void wireDigitalListener(DigitalListenerService *svc);
 
+    // Wire callsign lookup: debounce timer → QrzXmlLookupProvider → entry panel.
+    void wireCallsignLookup();
+
     // Returns true if any radio backend is currently connected.
     bool anyRadioConnected() const;
 
@@ -103,6 +108,11 @@ private:
     // Digital listeners
     WsjtxService              *m_wsjtxService = nullptr;
     QList<DigitalListenerService*> m_digitalListeners;
+
+    // Callsign lookup
+    QrzXmlLookupProvider *m_lookupProvider       = nullptr;
+    QTimer               *m_callsignLookupTimer  = nullptr;
+    QString               m_pendingLookupCallsign;
 
     // Central layout
     RadioPanel           *m_radioPanel = nullptr;
