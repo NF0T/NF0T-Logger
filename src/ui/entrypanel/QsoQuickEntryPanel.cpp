@@ -4,6 +4,8 @@
 
 #include <QComboBox>
 #include <QDateTimeEdit>
+#include <QDialog>
+#include <QMouseEvent>
 #include <QDoubleSpinBox>
 #include <QFont>
 #include <QFrame>
@@ -11,10 +13,16 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QPixmap>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QTimeZone>
+#include <QUrl>
 #include <QVBoxLayout>
 
 #include "app/settings/Settings.h"
@@ -207,6 +215,15 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
         return lbl;
     };
 
+    m_nam = new QNetworkAccessManager(this);
+
+    m_contactImage = new QLabel(this);
+    m_contactImage->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    m_contactImage->setVisible(false);
+    m_contactImage->setCursor(Qt::PointingHandCursor);
+    m_contactImage->setToolTip(tr("Click to view full size"));
+    m_contactImage->installEventFilter(this);
+
     m_lookupLabel = new QLabel(tr("Enter a callsign to look up station info."), this);
     m_lookupLabel->setWordWrap(true);
     m_lookupLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -232,9 +249,14 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     auto *rightLayout = new QVBoxLayout(rightPanel);
     rightLayout->setContentsMargins(6, 4, 6, 4);
     rightLayout->setSpacing(4);
+    auto *lookupRow = new QHBoxLayout;
+    lookupRow->setSpacing(6);
+    lookupRow->addWidget(m_contactImage, 0, Qt::AlignTop);
+    lookupRow->addWidget(m_lookupLabel, 1, Qt::AlignTop);
+
     rightLayout->addWidget(makeSectionHeader(tr("Callsign Lookup")));
     rightLayout->addWidget(makeDivider());
-    rightLayout->addWidget(m_lookupLabel);
+    rightLayout->addLayout(lookupRow);
     rightLayout->addWidget(m_prevQsosHeader);
     rightLayout->addWidget(makeDivider());
     rightLayout->addWidget(m_prevQsosList);
@@ -250,7 +272,7 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     root->setSpacing(0);
     root->addWidget(leftForm, 3);
     root->addWidget(colSep);
-    root->addWidget(rightPanel, 1);
+    root->addWidget(rightPanel, 2);
 
     clearForm();
     onModeChanged(m_mode->currentIndex());
@@ -295,14 +317,47 @@ void QsoQuickEntryPanel::setDxGrid(const QString &grid)
 
 void QsoQuickEntryPanel::setLookupStatus(const QString &status)
 {
+    if (m_imageReply) {
+        m_imageReply->abort();
+        m_imageReply = nullptr;
+    }
+    m_fullPixmap = QPixmap();
+    m_contactImage->clear();
+    m_contactImage->setVisible(false);
     m_lookupLabel->setText(status);
 }
 
 void QsoQuickEntryPanel::setLookupResult(const CallsignLookupResult &result)
 {
+    // Abort any in-flight image fetch for the previous callsign
+    if (m_imageReply) {
+        m_imageReply->abort();
+        m_imageReply = nullptr;
+    }
+    m_contactImage->clear();
+    m_contactImage->setVisible(false);
+
     if (result.callsign.isEmpty()) {
         m_lookupLabel->setText(tr("No data found."));
         return;
+    }
+
+    if (!result.imageUrl.isEmpty()) {
+        m_imageReply = m_nam->get(QNetworkRequest(QUrl(result.imageUrl)));
+        connect(m_imageReply, &QNetworkReply::finished, this, [this, reply = m_imageReply]() {
+            if (reply->error() == QNetworkReply::NoError) {
+                QPixmap px;
+                if (px.loadFromData(reply->readAll())) {
+                    m_fullPixmap = px;
+                    m_contactImage->setPixmap(
+                        px.scaled(100, 130, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                    m_contactImage->setVisible(true);
+                }
+            }
+            reply->deleteLater();
+            if (m_imageReply == reply)
+                m_imageReply = nullptr;
+        });
     }
 
     QStringList lines;
@@ -332,6 +387,35 @@ void QsoQuickEntryPanel::setLookupResult(const CallsignLookupResult &result)
     m_lookupLabel->setText(lines.join(QStringLiteral("\n")));
 }
 
+bool QsoQuickEntryPanel::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == m_contactImage && event->type() == QEvent::MouseButtonPress
+            && !m_fullPixmap.isNull()) {
+        auto *dlg = new QDialog(this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->setWindowTitle(tr("Contact Photo"));
+
+        auto *lbl = new QLabel(dlg);
+        lbl->setPixmap(m_fullPixmap);
+        lbl->setAlignment(Qt::AlignCenter);
+
+        auto *scroll = new QScrollArea(dlg);
+        scroll->setWidget(lbl);
+        scroll->setAlignment(Qt::AlignCenter);
+        scroll->setWidgetResizable(false);
+
+        auto *layout = new QVBoxLayout(dlg);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->addWidget(scroll);
+
+        dlg->resize(qMin(m_fullPixmap.width()  + 4,  1200),
+                    qMin(m_fullPixmap.height() + 40,  900));
+        dlg->exec();
+        return true;
+    }
+    return QWidget::eventFilter(obj, event);
+}
+
 void QsoQuickEntryPanel::setPreviousQsos(const QList<Qso> &qsos, int total)
 {
     m_prevQsosList->clear();
@@ -356,6 +440,18 @@ void QsoQuickEntryPanel::setPreviousQsos(const QList<Qso> &qsos, int total)
 
 void QsoQuickEntryPanel::clearForm()
 {
+    if (m_imageReply) {
+        m_imageReply->abort();
+        m_imageReply = nullptr;
+    }
+    m_fullPixmap = QPixmap();
+    m_contactImage->clear();
+    m_contactImage->setVisible(false);
+    m_lookupLabel->setText(tr("Enter a callsign to look up station info."));
+    m_prevQsosHeader->setText(tr("Previous QSOs"));
+    m_prevQsosList->clear();
+    m_prevQsosList->addItem(tr("Enter a callsign above."));
+
     m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
     m_callsign->clear();
     m_rstSent->clear();

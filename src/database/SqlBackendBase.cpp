@@ -314,22 +314,16 @@ std::expected<void, QString> SqlBackendBase::deleteQso(qint64 id)
     return {};
 }
 
-std::expected<QList<Qso>, QString> SqlBackendBase::fetchQsos(const QsoFilter &filter)
+static void buildWhereClause(const QsoFilter &filter,
+                             QStringList &where, QVariantMap &binds)
 {
-    // Whitelist order-by columns to prevent SQL injection
-    static const QSet<QString> validCols = {
-        "datetime_on", "callsign", "band", "mode", "freq",
-        "dxcc", "distance", "country", "name"
-    };
-    const QString orderCol = validCols.contains(filter.orderBy)
-                             ? filter.orderBy : QStringLiteral("datetime_on");
-
-    QStringList where;
-    QVariantMap binds;
-
     if (filter.call) {
         where << "callsign LIKE :call";
         binds[":call"] = QString("%%%1%").arg(*filter.call);
+    }
+    if (filter.exactCall) {
+        where << "callsign = :exactcall";
+        binds[":exactcall"] = *filter.exactCall;
     }
     if (filter.band) {
         where << "band = :band";
@@ -347,19 +341,32 @@ std::expected<QList<Qso>, QString> SqlBackendBase::fetchQsos(const QsoFilter &fi
         where << "datetime_on <= :to";
         binds[":to"] = filter.to->toUTC();
     }
-    if (filter.lotwPending && *filter.lotwPending)
+    if (filter.lotwPending    && *filter.lotwPending)
         where << "(lotw_qsl_sent = 'Y' AND lotw_qsl_rcvd != 'Y')";
-    if (filter.eqslPending && *filter.eqslPending)
+    if (filter.eqslPending    && *filter.eqslPending)
         where << "(eqsl_qsl_sent = 'Y' AND eqsl_qsl_rcvd != 'Y')";
-    if (filter.qrzPending && *filter.qrzPending)
+    if (filter.qrzPending     && *filter.qrzPending)
         where << "(qrz_qsl_sent = 'Y' AND qrz_qsl_rcvd != 'Y')";
     if (filter.clublogPending && *filter.clublogPending)
         where << "clublog_qsl_sent != 'Y'";
-
     if (filter.lotwUnsent    && *filter.lotwUnsent)    where << "lotw_qsl_sent    != 'Y'";
     if (filter.eqslUnsent    && *filter.eqslUnsent)    where << "eqsl_qsl_sent    != 'Y'";
     if (filter.qrzUnsent     && *filter.qrzUnsent)     where << "qrz_qsl_sent     != 'Y'";
     if (filter.clublogUnsent && *filter.clublogUnsent) where << "clublog_qsl_sent != 'Y'";
+}
+
+std::expected<QList<Qso>, QString> SqlBackendBase::fetchQsos(const QsoFilter &filter)
+{
+    static const QSet<QString> validCols = {
+        "datetime_on", "callsign", "band", "mode", "freq",
+        "dxcc", "distance", "country", "name"
+    };
+    const QString orderCol = validCols.contains(filter.orderBy)
+                             ? filter.orderBy : QStringLiteral("datetime_on");
+
+    QStringList where;
+    QVariantMap binds;
+    buildWhereClause(filter, where, binds);
 
     QString sql = "SELECT * FROM qsos";
     if (!where.isEmpty())
@@ -386,6 +393,26 @@ std::expected<int, QString> SqlBackendBase::qsoCount()
 {
     QSqlQuery q(m_db);
     if (!q.exec("SELECT COUNT(*) FROM qsos") || !q.next())
+        return std::unexpected(q.lastError().text());
+    return q.value(0).toInt();
+}
+
+std::expected<int, QString> SqlBackendBase::countQsos(const QsoFilter &filter)
+{
+    QStringList where;
+    QVariantMap binds;
+    buildWhereClause(filter, where, binds);
+
+    QString sql = "SELECT COUNT(*) FROM qsos";
+    if (!where.isEmpty())
+        sql += " WHERE " + where.join(" AND ");
+
+    QSqlQuery q(m_db);
+    q.prepare(sql);
+    for (auto it = binds.cbegin(); it != binds.cend(); ++it)
+        q.bindValue(it.key(), it.value());
+
+    if (!q.exec() || !q.next())
         return std::unexpected(q.lastError().text());
     return q.value(0).toInt();
 }

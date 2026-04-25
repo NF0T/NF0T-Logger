@@ -12,6 +12,8 @@ class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QNetworkAccessManager;
+class QNetworkReply;
 class QPushButton;
 
 /// Two-column quick QSO entry panel.
@@ -48,6 +50,9 @@ signals:
     void callsignChanged(const QString &callsign);
     void fullEntryRequested(const Qso &partialQso);
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private slots:
     void onModeChanged(int index);
     void onFreqChanged(double freqMhz);
@@ -79,9 +84,15 @@ private:
     QPushButton    *m_clearBtn     = nullptr;
 
     // Right column — context panel
+    QLabel      *m_contactImage    = nullptr;
     QLabel      *m_lookupLabel     = nullptr;
     QLabel      *m_prevQsosHeader  = nullptr;
     QListWidget *m_prevQsosList    = nullptr;
+
+    QPixmap m_fullPixmap;
+
+    QNetworkAccessManager *m_nam         = nullptr;
+    QNetworkReply         *m_imageReply  = nullptr;
 
     // Grid from WSJT-X stationSelected; not shown in quick panel but included in QSO
     QString m_dxGrid;

@@ -9,7 +9,8 @@
 /// Criteria for filtering QSO queries from the database.
 struct QsoFilter
 {
-    std::optional<QString>   call;         // substring match
+    std::optional<QString>   call;         // substring match (LIKE %call%)
+    std::optional<QString>   exactCall;    // exact callsign match (case-sensitive)
     std::optional<QString>   band;         // exact match
     std::optional<QString>   mode;         // exact match
     std::optional<QDateTime> from;         // datetime_on >= from (UTC)
