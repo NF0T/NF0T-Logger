@@ -791,8 +791,10 @@ void MainWindow::wireCallsignLookup()
         m_pendingLookupCallsign = callsign;
         if (callsign.isEmpty()) {
             m_callsignLookupTimer->stop();
-            m_cachedLookupResult = {};
             m_entryPanel->clearLookupPanel();
+            // Cache intentionally kept: a WSJT-X Status(empty) races qsoLogged;
+            // applyLookupResult() needs the cache after clearForm() wipes the panel.
+            // The cache is invalidated when a new callsign is entered (below).
             return;
         }
         if (!Callsign::isValid(callsign)) {
