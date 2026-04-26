@@ -4,90 +4,33 @@ This document captures planned features and enhancements. Items are grouped by m
 
 ---
 
-## v0.3.0 — Revamped QSO Entry Panel
+## v0.3.0 — Revamped QSO Entry Panel ✓ shipped
 
-The current QSO entry panel will be replaced entirely with a two-column split layout that sits between the radio status bar and the main log table.
+The QSO entry panel was replaced with a two-column split layout sitting between the radio status bar and the main log table.
 
 ### Left column — entry form
 
-The entry form is slimmed down to the fields needed for the vast majority of contacts. Fields not listed here move to the **Full Entry** dialog (see below).
-
-**Essential fields retained in the quick-entry panel:**
-
-- UTC date/time + Now button
-- Callsign
-- Band / Frequency (auto-filled from radio)
-- Mode / Submode (auto-filled from radio)
-- RST Sent / RST Received
-- Comment (short free-text, single line)
-
-**Removed from the panel (available via Full Entry):**
-
-- Operator name
-- Grid square (populated automatically via callsign lookup)
-- TX power
-- Activity / SIG / SIG_INFO (SOTA, POTA, WWFF, IOTA references)
-- All propagation, contest, and satellite fields
-
-A **"Full Entry…"** button at the bottom of the form opens the Full Entry dialog pre-populated with whatever has already been entered in the quick-entry panel. On save, the dialog writes the QSO directly to the log; the panel is then cleared as normal.
+Essential quick-log fields: UTC date/time (+ Now button), callsign, band/frequency (auto-filled from radio), mode/submode (auto-filled from radio), RST sent/received, and a single-line comment. A **Full Entry…** button and a **File → New QSO** menu action both open the full tabbed dialog.
 
 ### Right column — contact context panel
 
-A dynamic panel that populates as a callsign is entered in the entry form.
+Populates automatically as a callsign is typed.
 
 #### Callsign lookup
 
-A generic `CallsignLookupProvider` interface will allow multiple data sources to be queried with a user-configurable priority order stored in Settings. The first provider to return a result wins.
-
-**Planned providers (in priority order):**
-
-1. **QRZ XML Data API** — requires a QRZ subscription (XML access); authenticates with QRZ username and password (separate from the existing QRZ logbook API key). Returns name, address, grid square, DXCC entity, license class, and more.
-2. Further providers (Hamcall, FCC ULS, national licensing databases) are candidates for future milestones.
-
-Lookup is triggered by a **debounce timer** — the lookup fires only after the callsign field has been idle for ~3 seconds, avoiding unnecessary API requests on every keystroke.
+A `CallsignLookupProvider` interface supports pluggable data sources. The first provider shipped is the **QRZ XML Data API** (requires a QRZ subscription). Lookup fires on a 600 ms debounce timer after the callsign field is idle. Results are displayed in the context panel (name, location, license class, contact photo) and also pre-fill the relevant QSO fields (name, grid, country, state, county, continent, DXCC, CQ/ITU zone, lat/lon) using a two-layer priority model: station sources (WSJT-X, etc.) override lookup data; widget values always take priority over both. Clearing the callsign field resets the panel immediately.
 
 #### Previous QSOs
 
-Shows a compact list of the last 5 contacts with the entered callsign:
-
-```
-Previous QSOs (12 total)
-  2026-04-18   20m   FT8
-  2026-01-03   40m   FT8
-  2025-11-14   15m   SSB
-  2025-09-02   20m   FT8
-  2025-07-19   10m   FT8
-```
-
-Full contact history and main-table filtering based on entered callsign are candidates for a future milestone.
+Compact list of the last 5 contacts with the entered callsign, plus a real total count queried from the database.
 
 ### Full Entry dialog
 
-A modal dialog opened from the **"Full Entry…"** button in the quick-entry panel, or from a **File → New QSO** action. The dialog is tabbed to break the full `Qso` field set into logical sections:
+Tabbed modal dialog with six sections — Contact, Activity (SOTA/POTA/WWFF/IOTA), Propagation, Contest, Satellite, and Notes — covering the full `Qso` field set. Pre-populates from the quick-entry panel when opened from the Full Entry button.
 
-- **Contact** — all quick-entry fields plus operator name, grid, TX power, comment
-- **Activity** — SOTA, POTA, WWFF, IOTA references (SIG / SIG_INFO)
-- **Propagation** — A-index, K-index, solar flux, band conditions
-- **Contest** — contest name, serial number sent/received, exchange fields
-- **Satellite** — satellite name, mode, orbital pass data
-- **Notes** — free-text notes field (longer than the single-line comment)
+### Supporting infrastructure
 
-The dialog pre-populates from the quick-entry panel when launched from the panel button. It can also be opened on an existing QSO (replacing the current inline edit workflow) for a future enhancement.
-
----
-
-## Supporting infrastructure (v0.3.0)
-
-### Callsign validation and parsing
-
-A `Callsign` utility class that:
-
-- Validates whether a string is a plausible amateur radio callsign
-- Parses prefix, suffix, and portable designators (e.g. `W1AW/P`, `VE3XYZ/7`)
-- Extracts the base callsign for lookup and duplicate checking
-- Understands common prefix-to-DXCC mappings for prefill of country/zone fields
-
-This class will be used by the entry form, the lookup trigger, and the duplicate check.
+`Callsign` utility class: validates ITU callsign format, parses prefix/base/suffix, extracts the base call for lookup, and resolves DXCC entity / CQ zone / ITU zone from a built-in prefix table.
 
 ---
 
