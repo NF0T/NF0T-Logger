@@ -15,7 +15,7 @@ Open an issue using the **Feature request** template. Describe the problem you w
 The repository uses a two-branch model:
 
 ```
-main ────●────────────────────────────●── tag v0.2.0
+main ────●────────────────────────────●── tag v0.3.0
           \                          /
 develop    ●──bugfix──feature──●──●──
                         \     /

@@ -115,7 +115,7 @@ Run with `--help` for all options including dry-run mode.
 
 ## Project status
 
-NF0T-Logger is under active development and currently at **v0.2.0**. The core logging, radio control, and QSL workflows are functional. Rough edges exist — contributions and bug reports are welcome.
+NF0T-Logger is under active development and currently at **v0.3.0**. The core logging, radio control, and QSL workflows are functional. Rough edges exist — contributions and bug reports are welcome.
 
 ---
 
