@@ -47,12 +47,12 @@ src/
   main.cpp
   app/
     MainWindow.h/.cpp          # Central window; wires all backends via wireRadioBackend()
-                               # and wireDigitalListener()
+                               # and wireDigitalListener(); owns m_cachedLookupResult
     settings/
       Settings.h/.cpp          # Typed singleton; all persistent (non-secret) config
       SecureSettings.h/.cpp    # Async keychain loader; call loadAll() at startup
       SettingsDialog.h/.cpp    # Multi-page settings UI
-      pages/                   # One .h/.cpp per settings page
+      pages/                   # One .h/.cpp per settings page (incl. CallsignLookupPage)
   core/
     logbook/
       Qso.h                    # Central data struct (~160 fields, plain value type)
@@ -62,12 +62,18 @@ src/
       AdifParser.h/.cpp        # ADIF v3 length-based tokeniser (spec-compliant)
       AdifWriter.h/.cpp
     BandPlan.h/.cpp
+    Callsign.h/.cpp            # ITU callsign validation, prefix/base/suffix parsing, DXCC/zone lookup
     Maidenhead.h/.cpp          # Grid square ↔ lat/lon + haversine distance
   database/
     DatabaseInterface.h        # Pure abstract interface
     SqlBackendBase.h/.cpp      # Shared SQL + schema migration logic
     SqliteBackend.h/.cpp
     MariaDbBackend.h/.cpp
+  lookup/
+    CallsignLookupProvider.h   # Abstract base: lookup(), resultReady, lookupFailed, isAvailable()
+    CallsignLookupResult.h     # Plain struct: name, qth, state, county, country, grid, cont,
+                               #   dxcc, cqZone, ituZone, lat, lon, licenseClass, imageUrl, …
+    QrzXmlLookupProvider.h/.cpp  # QRZ XML Data API provider (requires QRZ subscription)
   radio/
     RadioBackend.h             # Abstract base: freqChanged, modeChanged, transmitChanged
     HamlibBackend.h/.cpp       # Hamlib CAT (compile-time optional via HAVE_HAMLIB)
@@ -83,9 +89,12 @@ src/
     ClubLogService.h/.cpp
   ui/
     RadioPanel.h/.cpp          # RX/TX pill indicators + frequency display
+    LogFilterBar.h/.cpp        # Callsign/band/mode/date/QSL filter bar with debounce
+    WhatsNewDialog.h/.cpp      # Fetches GitHub release notes for current APP_VERSION on upgrade
+    QsoFullEntryDialog.h/.cpp  # Tabbed full-entry dialog (Contact/Activity/Propagation/Contest/…)
     entrypanel/
-      QsoEntryPanel.h/.cpp     # New QSO entry form
-    QsoEditDialog.h/.cpp
+      QsoQuickEntryPanel.h/.cpp  # Two-column quick entry panel; two-layer data model
+                                 #   (m_lookupQso base, m_stationQso authoritative)
     QslColumns.h/.cpp
     QslUploadDialog.h/.cpp
     QslDownloadDialog.h/.cpp
@@ -101,6 +110,8 @@ tools/
 **Adding a new digital listener:** Subclass `DigitalListenerService`, call `wireDigitalListener()` in `MainWindow`.
 
 **Adding a new QSL service:** Subclass `QslService`.
+
+**Adding a new callsign lookup provider:** Subclass `CallsignLookupProvider`, implement `lookup()` and `isAvailable()`, emit `resultReady` or `lookupFailed`. Swap it into `MainWindow::wireCallsignLookup()` — the two-layer enrichment logic (`m_cachedLookupResult` + `applyLookupResult()`) is provider-agnostic.
 
 **Database operations** return `std::expected<T, QString>`. Never throw from DB code.
 

@@ -13,8 +13,9 @@ NF0T-Logger grew out of wanting a logger that worked reliably on Linux, felt lig
 
 - **Logbook management** — create, edit, search, and filter QSO records with a comprehensive field set (signal reports, propagation data, SOTA/POTA/WWFF/IOTA references, satellite, contest fields, and more)
 - **ADIF v3 import/export** — spec-compliant length-based tokeniser; compatible with Log4OM, WSJT-X, and other logging software
+- **Callsign lookup** — QRZ XML Data API integration; fires automatically as you type and pre-fills name, grid, country, DXCC, CQ/ITU zone, and more into every saved QSO (pluggable provider interface)
 - **CAT radio control** — Hamlib (serial and network) and TCI (ExpertSDR / AetherSDR) backends; frequency and mode sync with the entry panel
-- **WSJT-X integration** — UDP listener (multicast and unicast) with auto-logging; coexists with GridTracker2 and JTAlert on the same port
+- **WSJT-X integration** — UDP listener (multicast and unicast) with auto-logging; lookup data enriches auto-logged QSOs; coexists with GridTracker2 and JTAlert on the same port
 - **QSL confirmation management** — upload and download for LoTW, eQSL, QRZ, and ClubLog; confirmation dates written back to the local log
 - **Secure credential storage** — passwords and API keys stored in the system keychain (Windows Credential Manager, macOS Keychain, KWallet / libsecret on Linux)
 - **Flexible database backends** — SQLite (default, zero-config) and MariaDB
