@@ -573,11 +573,37 @@ bool QsoQuickEntryPanel::validate() const
     return true;
 }
 
+void QsoQuickEntryPanel::enrichQso(Qso &qso) const
+{
+    // For each derived field: if the incoming qso already has a value, leave it
+    // (the caller's source is authoritative). Otherwise fill from station layer
+    // first, then lookup layer as the base.
+    auto ms = [](QString &f, const QString &sta, const QString &lkp) {
+        if (f.isEmpty()) f = !sta.isEmpty() ? sta : lkp;
+    };
+    auto mi = [](int &f, int sta, int lkp) {
+        if (f == 0) f = sta > 0 ? sta : lkp;
+    };
+
+    ms(qso.gridsquare, m_stationQso.gridsquare, m_lookupQso.gridsquare);
+    ms(qso.name,       m_stationQso.name,       m_lookupQso.name);
+    ms(qso.qth,        m_stationQso.qth,        m_lookupQso.qth);
+    ms(qso.state,      m_stationQso.state,      m_lookupQso.state);
+    ms(qso.county,     m_stationQso.county,     m_lookupQso.county);
+    ms(qso.country,    m_stationQso.country,    m_lookupQso.country);
+    ms(qso.cont,       m_stationQso.cont,       m_lookupQso.cont);
+    mi(qso.dxcc,       m_stationQso.dxcc,       m_lookupQso.dxcc);
+    mi(qso.cqZone,     m_stationQso.cqZone,     m_lookupQso.cqZone);
+    mi(qso.ituZone,    m_stationQso.ituZone,    m_lookupQso.ituZone);
+    if (!qso.lat.has_value())
+        qso.lat = m_stationQso.lat.has_value() ? m_stationQso.lat : m_lookupQso.lat;
+    if (!qso.lon.has_value())
+        qso.lon = m_stationQso.lon.has_value() ? m_stationQso.lon : m_lookupQso.lon;
+}
+
 Qso QsoQuickEntryPanel::buildQso() const
 {
     Qso q;
-
-    // Widget values — user input, always authoritative.
     q.datetimeOn = m_dateTime->dateTime().toUTC();
     q.callsign   = m_callsign->text().toUpper().trimmed();
     q.band       = (m_band->currentIndex() > 0) ? m_band->currentText() : QString();
@@ -587,27 +613,7 @@ Qso QsoQuickEntryPanel::buildQso() const
     q.rstSent    = m_rstSent->text().trimmed();
     q.rstRcvd    = m_rstRcvd->text().trimmed();
     q.comment    = m_comment->text().trimmed();
-
-    // Derived fields — station layer (WSJT-X etc.) wins over lookup base layer.
-    // Both are ignored for any field the user edits directly in a widget.
-    auto ms = [](const QString &sta, const QString &lkp) {
-        return !sta.isEmpty() ? sta : lkp;
-    };
-    auto mi = [](int sta, int lkp) { return sta > 0 ? sta : lkp; };
-
-    q.gridsquare = ms(m_stationQso.gridsquare, m_lookupQso.gridsquare);
-    q.name       = ms(m_stationQso.name,       m_lookupQso.name);
-    q.qth        = ms(m_stationQso.qth,        m_lookupQso.qth);
-    q.state      = ms(m_stationQso.state,      m_lookupQso.state);
-    q.county     = ms(m_stationQso.county,     m_lookupQso.county);
-    q.country    = ms(m_stationQso.country,    m_lookupQso.country);
-    q.cont       = ms(m_stationQso.cont,       m_lookupQso.cont);
-    q.dxcc       = mi(m_stationQso.dxcc,       m_lookupQso.dxcc);
-    q.cqZone     = mi(m_stationQso.cqZone,     m_lookupQso.cqZone);
-    q.ituZone    = mi(m_stationQso.ituZone,    m_lookupQso.ituZone);
-    q.lat = m_stationQso.lat.has_value() ? m_stationQso.lat : m_lookupQso.lat;
-    q.lon = m_stationQso.lon.has_value() ? m_stationQso.lon : m_lookupQso.lon;
-
+    enrichQso(q);
     return q;
 }
 

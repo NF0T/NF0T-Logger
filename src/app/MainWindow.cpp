@@ -761,8 +761,9 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
             m_entryPanel, &QsoQuickEntryPanel::clearForm);
 
     connect(svc, &DigitalListenerService::qsoLogged,
-            this, [this](const Qso &qso) {
+            this, [this](Qso qso) {
         if (!Settings::instance().wsjtxAutoLog()) return;
+        m_entryPanel->enrichQso(qso);   // fill blanks from lookup/station layers
         onQsoReady(qso);
         m_entryPanel->clearForm();
     });

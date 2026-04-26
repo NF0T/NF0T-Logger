@@ -46,6 +46,11 @@ public:
     // without touching the entry fields. Called when the callsign field is cleared.
     void clearLookupPanel();
 
+    // Fills empty fields in qso from the station layer then the lookup layer.
+    // Fields already set in qso are left untouched — the caller's data wins.
+    // Use this before saving any externally-provided QSO (e.g. from WSJT-X).
+    void enrichQso(Qso &qso) const;
+
 public slots:
     void clearForm();
 
