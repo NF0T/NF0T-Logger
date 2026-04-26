@@ -8,6 +8,7 @@
 #include <QStringList>
 
 #include "core/logbook/Qso.h"
+#include "lookup/CallsignLookupResult.h"
 
 class QAction;
 class QLabel;
@@ -81,6 +82,10 @@ private:
     // Wire a digital listener's signals to the entry panel and auto-log logic.
     void wireDigitalListener(DigitalListenerService *svc);
 
+    // Apply non-empty lookup result fields to any empty fields in qso.
+    // Used in the WSJT-X auto-log path where the panel may already be cleared.
+    static void applyLookupResult(Qso &qso, const CallsignLookupResult &r);
+
     // Wire callsign lookup: debounce timer → QrzXmlLookupProvider → entry panel.
     void wireCallsignLookup();
 
@@ -113,6 +118,7 @@ private:
     QrzXmlLookupProvider *m_lookupProvider       = nullptr;
     QTimer               *m_callsignLookupTimer  = nullptr;
     QString               m_pendingLookupCallsign;
+    CallsignLookupResult  m_cachedLookupResult;   // survives clearForm() for WSJT-X enrichment
 
     // Central layout
     RadioPanel           *m_radioPanel = nullptr;

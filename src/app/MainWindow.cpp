@@ -763,7 +763,9 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
     connect(svc, &DigitalListenerService::qsoLogged,
             this, [this](Qso qso) {
         if (!Settings::instance().wsjtxAutoLog()) return;
-        m_entryPanel->enrichQso(qso);   // fill blanks from lookup/station layers
+        // Use the MainWindow cache — the panel may already be cleared by a
+        // concurrent stationSelected("") Status packet from WSJT-X.
+        applyLookupResult(qso, m_cachedLookupResult);
         onQsoReady(qso);
         m_entryPanel->clearForm();
     });
@@ -789,6 +791,7 @@ void MainWindow::wireCallsignLookup()
         m_pendingLookupCallsign = callsign;
         if (callsign.isEmpty()) {
             m_callsignLookupTimer->stop();
+            m_cachedLookupResult = {};
             m_entryPanel->clearLookupPanel();
             return;
         }
@@ -796,7 +799,8 @@ void MainWindow::wireCallsignLookup()
             m_callsignLookupTimer->stop();
             return;
         }
-        m_callsignLookupTimer->start();   // restarts the debounce window
+        m_cachedLookupResult = {};   // stale for new callsign until result arrives
+        m_callsignLookupTimer->start();
     });
 
     connect(m_callsignLookupTimer, &QTimer::timeout, this, [this]() {
@@ -829,15 +833,39 @@ void MainWindow::wireCallsignLookup()
 
     connect(m_lookupProvider, &CallsignLookupProvider::resultReady,
             this, [this](const QString &callsign, const CallsignLookupResult &result) {
-        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) == 0)
-            m_entryPanel->setLookupResult(result);
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
+        m_cachedLookupResult = result;   // keep a copy that survives clearForm()
+        m_entryPanel->setLookupResult(result);
     });
 
     connect(m_lookupProvider, &CallsignLookupProvider::lookupFailed,
             this, [this](const QString &callsign, const QString &error) {
-        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) == 0)
-            m_entryPanel->setLookupStatus(tr("Lookup failed: %1").arg(error));
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
+        m_cachedLookupResult = {};
+        m_entryPanel->setLookupStatus(tr("Lookup failed: %1").arg(error));
     });
+}
+
+// ---------------------------------------------------------------------------
+// Static helpers
+// ---------------------------------------------------------------------------
+
+void MainWindow::applyLookupResult(Qso &qso, const CallsignLookupResult &r)
+{
+    auto ms = [](QString &f, const QString &v) { if (f.isEmpty() && !v.isEmpty()) f = v; };
+    auto mi = [](int    &f, int             v) { if (f == 0    && v  >  0      ) f = v; };
+    ms(qso.name,       r.name);
+    ms(qso.qth,        r.qth);
+    ms(qso.state,      r.state);
+    ms(qso.county,     r.county);
+    ms(qso.country,    r.country);
+    ms(qso.gridsquare, r.gridsquare);
+    ms(qso.cont,       r.cont);
+    mi(qso.dxcc,       r.dxcc);
+    mi(qso.cqZone,     r.cqZone);
+    mi(qso.ituZone,    r.ituZone);
+    if (!qso.lat.has_value() && r.lat.has_value()) qso.lat = r.lat;
+    if (!qso.lon.has_value() && r.lon.has_value()) qso.lon = r.lon;
 }
 
 // ---------------------------------------------------------------------------
