@@ -171,6 +171,21 @@ void MainWindow::setupMenuBar()
     // --- File ---
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
 
+    m_newQsoAction = new QAction(tr("New &QSO…"), this);
+    connect(m_newQsoAction, &QAction::triggered, this, [this]() {
+        Qso qso;
+        const Settings &s = Settings::instance();
+        qso.stationCallsign = s.stationCallsign();
+        qso.antenna         = s.equipmentAntenna();
+        qso.rig             = s.equipmentRig();
+        const double pwr    = s.equipmentTxPwr();
+        if (pwr > 0.0) qso.txPwr = pwr;
+        QsoFullEntryDialog dlg(qso, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+        onQsoReady(dlg.qso());
+    });
+    fileMenu->addAction(m_newQsoAction);
+
     m_newLogAction = new QAction(tr("&New Log..."), this);
     m_newLogAction->setShortcut(QKeySequence::New);
     connect(m_newLogAction, &QAction::triggered, this, &MainWindow::onNewLog);
@@ -771,6 +786,11 @@ void MainWindow::wireCallsignLookup()
     connect(m_entryPanel, &QsoQuickEntryPanel::callsignChanged,
             this, [this](const QString &callsign) {
         m_pendingLookupCallsign = callsign;
+        if (callsign.isEmpty()) {
+            m_callsignLookupTimer->stop();
+            m_entryPanel->clearLookupPanel();
+            return;
+        }
         if (!Callsign::isValid(callsign)) {
             m_callsignLookupTimer->stop();
             return;

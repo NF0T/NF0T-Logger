@@ -42,6 +42,10 @@ public:
     void setLookupStatus(const QString &status);
     void setLookupResult(const CallsignLookupResult &result);
 
+    // Resets the right-column display and both data layers (lookup + station)
+    // without touching the entry fields. Called when the callsign field is cleared.
+    void clearLookupPanel();
+
 public slots:
     void clearForm();
 
@@ -94,8 +98,12 @@ private:
     QNetworkAccessManager *m_nam         = nullptr;
     QNetworkReply         *m_imageReply  = nullptr;
 
-    // Grid from WSJT-X stationSelected; not shown in quick panel but included in QSO
-    QString m_dxGrid;
+    // Two-layer data model for derived (non-widget) QSO fields:
+    //   m_lookupQso  — base layer populated by the callsign lookup service
+    //   m_stationQso — authoritative layer set by WSJT-X, future station sources, etc.
+    // buildQso() merges: station wins over lookup; both yield to widget values.
+    Qso m_lookupQso;
+    Qso m_stationQso;
 
     bool m_suppressBandFreqSignals = false;
 };

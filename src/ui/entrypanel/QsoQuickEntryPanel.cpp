@@ -312,7 +312,7 @@ void QsoQuickEntryPanel::setDxCall(const QString &call)
 
 void QsoQuickEntryPanel::setDxGrid(const QString &grid)
 {
-    m_dxGrid = grid.toUpper();
+    m_stationQso.gridsquare = grid.toUpper();
 }
 
 void QsoQuickEntryPanel::setLookupStatus(const QString &status)
@@ -385,6 +385,22 @@ void QsoQuickEntryPanel::setLookupResult(const CallsignLookupResult &result)
         lines << tr("Class: %1").arg(result.licenseClass);
 
     m_lookupLabel->setText(lines.join(QStringLiteral("\n")));
+
+    // Store all mappable fields in the lookup layer for buildQso().
+    // Station sources (WSJT-X etc.) take priority when merging.
+    m_lookupQso = Qso{};
+    m_lookupQso.name       = result.name;
+    m_lookupQso.qth        = result.qth;
+    m_lookupQso.state      = result.state;
+    m_lookupQso.county     = result.county;
+    m_lookupQso.country    = result.country;
+    m_lookupQso.gridsquare = result.gridsquare.toUpper();
+    m_lookupQso.cont       = result.cont;
+    m_lookupQso.dxcc       = result.dxcc;
+    m_lookupQso.cqZone     = result.cqZone;
+    m_lookupQso.ituZone    = result.ituZone;
+    m_lookupQso.lat        = result.lat;
+    m_lookupQso.lon        = result.lon;
 }
 
 bool QsoQuickEntryPanel::eventFilter(QObject *obj, QEvent *event)
@@ -438,7 +454,7 @@ void QsoQuickEntryPanel::setPreviousQsos(const QList<Qso> &qsos, int total)
 // Slots
 // ---------------------------------------------------------------------------
 
-void QsoQuickEntryPanel::clearForm()
+void QsoQuickEntryPanel::clearLookupPanel()
 {
     if (m_imageReply) {
         m_imageReply->abort();
@@ -451,13 +467,19 @@ void QsoQuickEntryPanel::clearForm()
     m_prevQsosHeader->setText(tr("Previous QSOs"));
     m_prevQsosList->clear();
     m_prevQsosList->addItem(tr("Enter a callsign above."));
+    m_lookupQso  = Qso{};
+    m_stationQso = Qso{};
+}
+
+void QsoQuickEntryPanel::clearForm()
+{
+    clearLookupPanel();
 
     m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
     m_callsign->clear();
     m_rstSent->clear();
     m_rstRcvd->clear();
     m_comment->clear();
-    m_dxGrid.clear();
 
     if (m_mode->currentIndex() < 0)
         m_mode->setCurrentText(QStringLiteral("SSB"));
@@ -554,6 +576,8 @@ bool QsoQuickEntryPanel::validate() const
 Qso QsoQuickEntryPanel::buildQso() const
 {
     Qso q;
+
+    // Widget values — user input, always authoritative.
     q.datetimeOn = m_dateTime->dateTime().toUTC();
     q.callsign   = m_callsign->text().toUpper().trimmed();
     q.band       = (m_band->currentIndex() > 0) ? m_band->currentText() : QString();
@@ -562,8 +586,28 @@ Qso QsoQuickEntryPanel::buildQso() const
     q.submode    = m_submode->isEnabled() ? m_submode->currentText() : QString();
     q.rstSent    = m_rstSent->text().trimmed();
     q.rstRcvd    = m_rstRcvd->text().trimmed();
-    q.gridsquare = m_dxGrid;
     q.comment    = m_comment->text().trimmed();
+
+    // Derived fields — station layer (WSJT-X etc.) wins over lookup base layer.
+    // Both are ignored for any field the user edits directly in a widget.
+    auto ms = [](const QString &sta, const QString &lkp) {
+        return !sta.isEmpty() ? sta : lkp;
+    };
+    auto mi = [](int sta, int lkp) { return sta > 0 ? sta : lkp; };
+
+    q.gridsquare = ms(m_stationQso.gridsquare, m_lookupQso.gridsquare);
+    q.name       = ms(m_stationQso.name,       m_lookupQso.name);
+    q.qth        = ms(m_stationQso.qth,        m_lookupQso.qth);
+    q.state      = ms(m_stationQso.state,      m_lookupQso.state);
+    q.county     = ms(m_stationQso.county,     m_lookupQso.county);
+    q.country    = ms(m_stationQso.country,    m_lookupQso.country);
+    q.cont       = ms(m_stationQso.cont,       m_lookupQso.cont);
+    q.dxcc       = mi(m_stationQso.dxcc,       m_lookupQso.dxcc);
+    q.cqZone     = mi(m_stationQso.cqZone,     m_lookupQso.cqZone);
+    q.ituZone    = mi(m_stationQso.ituZone,    m_lookupQso.ituZone);
+    q.lat = m_stationQso.lat.has_value() ? m_stationQso.lat : m_lookupQso.lat;
+    q.lon = m_stationQso.lon.has_value() ? m_stationQso.lon : m_lookupQso.lon;
+
     return q;
 }
 

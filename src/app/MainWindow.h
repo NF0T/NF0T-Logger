@@ -132,6 +132,7 @@ private:
     void showStatusMessage(const QString &msg, int ms = 0);
 
     // Actions
+    QAction *m_newQsoAction          = nullptr;
     QAction *m_newLogAction          = nullptr;
     QAction *m_importAdifAction      = nullptr;
     QAction *m_exportAdifAction      = nullptr;
