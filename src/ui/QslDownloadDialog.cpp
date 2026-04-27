@@ -20,13 +20,9 @@
 #include "qsl/QslService.h"
 
 // ---------------------------------------------------------------------------
-// Mode normalisation
-//
-// Some services (eQSL) follow the ADIF spec strictly and return FT4 as
-// MODE=MFSK / SUBMODE=FT4.  Our entry panel stores FT4 as MODE=FT4 (a
-// common logger convention).  Normalise both to a canonical pair so the
-// matching logic handles either representation.
+// QSL confirmation matching helpers
 // ---------------------------------------------------------------------------
+
 // Resolve both ADIF-spec and common-logger representations of a mode to a
 // canonical (MODE, SUBMODE) pair so QSL matching is service-agnostic.
 //
@@ -34,28 +30,6 @@
 //   • FT4, FST4, FST4W, JS8, Q65 are submodes of MFSK
 //   • PSK31, PSK63 (and variants) are submodes of PSK
 //   • Renamed modes: PACKET→PKT, THROB→THRB, CONTESTIA→CONTESTI
-// Returns true if a (mode, submode) pair from a QSL service is compatible
-// with a local (mode, submode) pair for matching purposes.
-//
-// The main case is LoTW's "DATA" mode, which is a catch-all for digital modes
-// that don't have their own distinct LoTW code: FT4, JT65, JT9, WSPR, JS8,
-// FST4, Q65, Olivia, etc.  CW, SSB, AM, FM, RTTY, FT8, and PSK have explicit
-// LoTW codes and are never reported as DATA, so we exclude them.
-static bool modesCompatible(const QPair<QString,QString> &conf,
-                             const QPair<QString,QString> &local)
-{
-    if (conf == local) return true;
-    if (conf.first == QLatin1String("DATA")) {
-        static const QSet<QString> lotwNamed = {
-            QStringLiteral("CW"),  QStringLiteral("SSB"), QStringLiteral("AM"),
-            QStringLiteral("FM"),  QStringLiteral("RTTY"),QStringLiteral("FT8"),
-            QStringLiteral("PSK")
-        };
-        return !lotwNamed.contains(local.first);
-    }
-    return false;
-}
-
 static QPair<QString,QString> normaliseMode(const QString &mode, const QString &submode)
 {
     const QString m = mode.toUpper().trimmed();
@@ -89,6 +63,59 @@ static QPair<QString,QString> normaliseMode(const QString &mode, const QString &
     if (m == QLatin1String("CONTESTIA") || m == QLatin1String("CONTESTI")) return {"CONTESTI", s};
 
     return {m, s};
+}
+
+// Returns true if a normalised (mode, submode) pair from a QSL confirmation
+// is compatible with a normalised pair from the local log.
+//
+// Fuzzy rules handle service-specific mode representations:
+//   • LoTW DATA — catch-all for digital modes without a distinct LoTW code
+//     (FT4, JT65, JT9, WSPR, JS8, FST4, Q65, Olivia, …). Modes with explicit
+//     LoTW codes (CW, SSB, AM, FM, RTTY, FT8, PSK) are never reported as DATA.
+//   • No submode — eQSL and others sometimes omit the submode (e.g. MFSK with
+//     no FT4). Match if the parent modes agree.
+static bool modesCompatible(const QPair<QString,QString> &conf,
+                             const QPair<QString,QString> &local)
+{
+    if (conf == local) return true;
+    if (conf.first == QLatin1String("DATA")) {
+        static const QSet<QString> lotwNamed = {
+            QStringLiteral("CW"),  QStringLiteral("SSB"), QStringLiteral("AM"),
+            QStringLiteral("FM"),  QStringLiteral("RTTY"),QStringLiteral("FT8"),
+            QStringLiteral("PSK")
+        };
+        return !lotwNamed.contains(local.first);
+    }
+    if (conf.first == local.first && conf.second.isEmpty()) return true;
+    return false;
+}
+
+// Returns true if a local QSO is a candidate match for a QSL confirmation.
+//
+// All five criteria must pass:
+//   1. Callsign — case-insensitive exact match
+//   2. Band     — case-insensitive exact match
+//   3. UTC date — same calendar day
+//   4. UTC time — within ±5 minutes when the confirmation carries a real time
+//                 (not a midnight default). Tight enough to separate back-to-back
+//                 contacts (e.g. POTA activations) while tolerating clock skew.
+//   5. Mode     — normalised and fuzzy-matched via modesCompatible()
+static bool qsoMatchesConfirmation(const Qso &local, const Qso &conf)
+{
+    if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) return false;
+    if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) return false;
+
+    const QDateTime localUtc = local.datetimeOn.toUTC();
+    const QDateTime confUtc  = conf.datetimeOn.toUTC();
+    if (localUtc.date() != confUtc.date()) return false;
+
+    if (confUtc.time() != QTime(0, 0)) {
+        if (qAbs(localUtc.secsTo(confUtc)) > 5 * 60) return false;
+    }
+
+    const auto [confMode,  confSub]  = normaliseMode(conf.mode,  conf.submode);
+    const auto [localMode, localSub] = normaliseMode(local.mode, local.submode);
+    return modesCompatible({confMode, confSub}, {localMode, localSub});
 }
 
 QslDownloadDialog::QslDownloadDialog(const QList<QslService*> &services,
@@ -254,16 +281,12 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
             const auto [confMode, confSub] = normaliseMode(conf.mode, conf.submode);
             const QString key = QStringLiteral("%1  %2  %3  %4")
                                     .arg(conf.callsign,
-                                         conf.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
+                                         conf.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd HH:mm")),
                                          conf.band, confMode + (confSub.isEmpty() ? QString() : QStringLiteral("/") + confSub));
 
             bool found = false;
             for (Qso local : m_localQsos) {
-                if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
-                if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
-                if (local.datetimeOn.toUTC().date() != conf.datetimeOn.toUTC().date()) continue;
-                const auto [localMode, localSub] = normaliseMode(local.mode, local.submode);
-                if (!modesCompatible({confMode, confSub}, {localMode, localSub})) continue;
+                if (!qsoMatchesConfirmation(local, conf)) continue;
 
                 found = true;
 
