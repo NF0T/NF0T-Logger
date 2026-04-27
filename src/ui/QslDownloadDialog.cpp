@@ -34,6 +34,28 @@
 //   • FT4, FST4, FST4W, JS8, Q65 are submodes of MFSK
 //   • PSK31, PSK63 (and variants) are submodes of PSK
 //   • Renamed modes: PACKET→PKT, THROB→THRB, CONTESTIA→CONTESTI
+// Returns true if a (mode, submode) pair from a QSL service is compatible
+// with a local (mode, submode) pair for matching purposes.
+//
+// The main case is LoTW's "DATA" mode, which is a catch-all for digital modes
+// that don't have their own distinct LoTW code: FT4, JT65, JT9, WSPR, JS8,
+// FST4, Q65, Olivia, etc.  CW, SSB, AM, FM, RTTY, FT8, and PSK have explicit
+// LoTW codes and are never reported as DATA, so we exclude them.
+static bool modesCompatible(const QPair<QString,QString> &conf,
+                             const QPair<QString,QString> &local)
+{
+    if (conf == local) return true;
+    if (conf.first == QLatin1String("DATA")) {
+        static const QSet<QString> lotwNamed = {
+            QStringLiteral("CW"),  QStringLiteral("SSB"), QStringLiteral("AM"),
+            QStringLiteral("FM"),  QStringLiteral("RTTY"),QStringLiteral("FT8"),
+            QStringLiteral("PSK")
+        };
+        return !lotwNamed.contains(local.first);
+    }
+    return false;
+}
+
 static QPair<QString,QString> normaliseMode(const QString &mode, const QString &submode)
 {
     const QString m = mode.toUpper().trimmed();
@@ -241,7 +263,7 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
                 if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
                 if (local.datetimeOn.toUTC().date() != conf.datetimeOn.toUTC().date()) continue;
                 const auto [localMode, localSub] = normaliseMode(local.mode, local.submode);
-                if (localMode != confMode || localSub != confSub) continue;
+                if (!modesCompatible({confMode, confSub}, {localMode, localSub})) continue;
 
                 found = true;
 
