@@ -128,6 +128,45 @@ The locked state is lifted only after the target backend is closed and the dialo
 
 ---
 
+## vX.X.0 — CTY.dat Offline DXCC Lookup
+
+Add a `CallsignLookupProvider` backed by the [CTY.dat country file](https://www.country-files.com/cty-dat-format/) (Jim Reisert AD1C / Big Cty). CTY.dat is the de-facto standard offline DXCC/zone/continent database used by CT, N1MM, and most contest loggers, and is updated several times per year as DXCC entities change.
+
+### What CTY.dat provides
+
+Each record in CTY.dat covers one DXCC entity and supplies:
+
+- Country name, CQ zone, ITU zone, continent, latitude, longitude, UTC offset
+- Primary DXCC prefix (prefixed with `*` for DARC WAEDC-only entities)
+- Alias prefix list (comma-separated lines, terminated by `;`), with optional per-alias overrides:
+  - `=CALL` — exact callsign match (not a prefix)
+  - `(#)` — CQ zone override for that prefix
+  - `[#]` — ITU zone override
+  - `<lat/lon>` — lat/lon override
+  - `{aa}` — continent override
+  - `~#~` — UTC offset override
+
+### Integration
+
+CTY.dat is a local, file-backed source. The `CtyDatLookupProvider` will implement `CallsignLookupProvider` and emit `resultReady` synchronously (no network request). It fills the `CallsignLookupResult` fields that CTY.dat covers: `dxcc`, `cqZone`, `ituZone`, `cont`, `lat`, `lon`, and `country`. Fields that CTY.dat does not carry (name, QTH, grid, license class, image) remain empty and can be filled by a second provider such as QRZ XML.
+
+The CTY.dat provider supersedes the built-in prefix table in the `Callsign` utility class; that table can be retired once CTY.dat is the authoritative source.
+
+### Prefix matching algorithm
+
+1. Check alias list for an exact callsign match (`=CALL`) — these take priority
+2. Strip portable suffixes and try progressively shorter prefixes until a match is found (longest-prefix-wins)
+3. Apply any per-alias zone/continent/lat/lon overrides on top of the entity defaults
+4. Parse top to bottom; the first matching entity wins on duplicate entries
+
+### Bundled file and in-app updates
+
+- A recent `cty.dat` is committed to the repository and shipped with every tagged release so the provider works out-of-the-box without any network access
+- A **Settings → Callsign Lookup → Update CTY.dat** button fetches the latest file from `https://www.country-files.com/cty.dat`, validates it (checks that it parses without error and contains a reasonable number of entities), and installs it to the app data directory (`QStandardPaths::AppLocalDataLocation`). The installed file takes precedence over the bundled one; if the installed file is corrupt or absent the bundled file is used as fallback
+- The settings page shows the currently active CTY.dat version (date line at the top of the file) and the date it was last updated
+
+---
+
 ## Future / under consideration
 
 These are ideas that have been discussed but not yet scoped:
