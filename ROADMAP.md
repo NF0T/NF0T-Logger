@@ -90,6 +90,44 @@ A new `.github/workflows/release.yml` triggers on `v*` tag pushes (separate from
 
 ---
 
+## vX.X.0 — Database Migration Tool
+
+Allow users to move their logbook between the SQLite and MariaDB backends without going through an intermediate ADIF export/import.
+
+### Use case
+
+The Settings page already lets users switch backends, but switching leaves the old database untouched and presents an empty log on the new backend. This feature adds a **Tools → Migrate Database…** action that copies all QSO records (and any future schema objects) from one backend to the other in a single guided workflow.
+
+### Workflow
+
+1. User opens **Tools → Migrate Database…**
+2. A dialog shows the current (source) backend and asks the user to configure the target backend (path for SQLite, or host/port/credentials for MariaDB)
+3. A dry-run pass reports how many QSOs would be transferred and flags any records that would be rejected (e.g. duplicate `callsign + datetime_on` on the target)
+4. On confirmation, all QSOs are read from the source via `DatabaseInterface::fetchQsos()` and inserted into the target via `DatabaseInterface::insertQso()` in a single transaction where supported
+5. On success, the dialog offers to switch the active backend in Settings to the target database
+
+### Notes
+
+- The active backend (`m_db`) is the source; the dialog opens a **second** backend instance for the target — both can coexist because each `SqlBackendBase` gets its own unique Qt SQL connection name (`NF0T_0`, `NF0T_1`, …). The second instance exists only for the duration of the migration; it is closed and destroyed before the dialog exits. The general design does not envision multiple databases open simultaneously.
+- The dialog must collect target connection details from the user: a file-path chooser for SQLite, or host/port/user/password fields for MariaDB. MariaDB credentials are stored in the keychain via `SecureSettings`, so the dialog needs to handle the async load before it can pre-fill those fields.
+- `initSchema()` on the target runs all pending migrations automatically before any records are written, so the target schema is always current.
+- Duplicate handling should mirror ADIF import: unique-constraint violations are counted and reported rather than aborting the batch.
+- MariaDB → SQLite is equally supported; the direction is determined solely by which backend is source vs. target.
+- The transfer loop itself is backend-agnostic: `source->fetchQsos()` → `target->insertQso()` per record.
+
+### Migration guard
+
+While a migration is in progress the main window must be put into a locked state:
+
+- WSJT-X and any other digital listener services are paused (or their `qsoLogged` signal is disconnected) so that incoming auto-log events do not write to the source database mid-transfer
+- The QSO entry panel and **File → New QSO** action are disabled
+- QSL upload and download actions are disabled
+- The log table is set read-only (no edit/delete)
+
+The locked state is lifted only after the target backend is closed and the dialog exits (whether the migration succeeded, failed, or was cancelled).
+
+---
+
 ## Future / under consideration
 
 These are ideas that have been discussed but not yet scoped:
