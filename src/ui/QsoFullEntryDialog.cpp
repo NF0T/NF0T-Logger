@@ -548,6 +548,12 @@ void QsoFullEntryDialog::loadQso(const Qso &q)
     if (!q.submode.isEmpty()) {
         const int sIdx = m_submode->findText(q.submode, Qt::MatchFixedString);
         if (sIdx >= 0) m_submode->setCurrentIndex(sIdx);
+    } else if (q.id >= 0 && m_submode->isEnabled()) {
+        // Existing QSO with no submode recorded: insert a blank placeholder so
+        // that saving without picking a submode preserves the empty value rather
+        // than silently adopting the first item in the list.
+        m_submode->insertItem(0, QString());
+        m_submode->setCurrentIndex(0);
     }
 
     m_rstSent->setText(q.rstSent);

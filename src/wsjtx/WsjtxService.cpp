@@ -317,10 +317,14 @@ void WsjtxService::handleLoggedAdif(QDataStream &ds, const QString &clientId)
 
     const AdifParser::Result parsed = AdifParser::parseString(adifText);
     for (Qso qso : parsed.qsos) {
+        const QString adifSubmode = qso.submode;
         QString mode, submode;
         normaliseMode(qso.mode, mode, submode);
         qso.mode    = mode;
-        qso.submode = submode;
+        // normaliseMode only maps standalone WSJT-X names (e.g. "FT4" → MFSK/FT4).
+        // When ADIF already carries the canonical parent mode ("MFSK") plus a submode
+        // field, normaliseMode returns an empty submode — keep the ADIF-parsed one.
+        qso.submode = submode.isEmpty() ? adifSubmode : submode;
         emit qsoLogged(qso);
     }
 }
