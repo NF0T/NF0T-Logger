@@ -146,9 +146,19 @@ Each record in CTY.dat covers one DXCC entity and supplies:
   - `{aa}` — continent override
   - `~#~` — UTC offset override
 
-### Integration
+### Integration and provider precedence
 
-CTY.dat is a local, file-backed source. The `CtyDatLookupProvider` will implement `CallsignLookupProvider` and emit `resultReady` synchronously (no network request). It fills the `CallsignLookupResult` fields that CTY.dat covers: `dxcc`, `cqZone`, `ituZone`, `cont`, `lat`, `lon`, and `country`. Fields that CTY.dat does not carry (name, QTH, grid, license class, image) remain empty and can be filled by a second provider such as QRZ XML.
+CTY.dat is a local, file-backed source. The `CtyDatLookupProvider` will implement `CallsignLookupProvider` and emit `resultReady` synchronously (no network request). It fills the `CallsignLookupResult` fields that CTY.dat covers: `dxcc`, `cqZone`, `ituZone`, `cont`, `lat`, `lon`, and `country`. Fields that CTY.dat does not carry (name, QTH, grid, license class, image) remain empty.
+
+The intended lookup chain, when both providers are enabled, is:
+
+1. **CTY.dat** fires immediately on callsign entry and populates DXCC/zone/continent/country/lat/lon from the prefix table. This gives instant offline enrichment with no debounce delay.
+2. **QRZ XML** fires after the existing 600 ms debounce and *supplements and updates* the CTY.dat result: it fills fields CTY.dat cannot provide (name, QTH, grid, license class, photo) and also overrides lat/lon and grid with the operator's actual registered location, which is more precise than CTY.dat's per-country centroid. QRZ zone data may also override CTY.dat where the two differ.
+3. **Direct user entry** in the form always takes final precedence and overwrites any provider-supplied value.
+
+This means the merge is not a simple fill-in-empty: QRZ is allowed to override a subset of fields (lat, lon, grid, and optionally zone) even when CTY.dat has already populated them. The exact set of "QRZ may override" fields should be defined explicitly in the merge logic.
+
+`wireCallsignLookup()` currently wires a single provider. Supporting a chain will require either sequential wiring (CTY.dat result applied first, QRZ result merged on arrival) or a lightweight provider-aggregator class. The former is simpler and consistent with the existing architecture.
 
 The CTY.dat provider supersedes the built-in prefix table in the `Callsign` utility class; that table can be retired once CTY.dat is the authoritative source.
 
