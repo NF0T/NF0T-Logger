@@ -243,6 +243,19 @@ public:
     void        setWsjtxMulticastIfaces(const QStringList &v);
 
     // -----------------------------------------------------------------------
+    // Callsign lookup
+    // -----------------------------------------------------------------------
+    bool    callsignLookupEnabled() const;
+    void    setCallsignLookupEnabled(bool v);
+
+    QString qrzXmlUsername() const;
+    void    setQrzXmlUsername(const QString &v);
+
+    // Secure — stored in system keychain
+    QString qrzXmlPassword() const;
+    void    setQrzXmlPassword(const QString &v);
+
+    // -----------------------------------------------------------------------
     // UI state (window geometry etc.)
     // -----------------------------------------------------------------------
     QByteArray mainWindowGeometry() const;

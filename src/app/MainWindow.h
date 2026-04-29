@@ -8,12 +8,15 @@
 #include <QStringList>
 
 #include "core/logbook/Qso.h"
+#include "lookup/CallsignLookupResult.h"
 
 class QAction;
 class QLabel;
-class QSplitter;
 class QTableView;
+class QTimer;
 
+class QsoFullEntryDialog;
+class QrzXmlLookupProvider;
 class ClubLogService;
 class DatabaseInterface;
 class DigitalListenerService;
@@ -23,7 +26,7 @@ class LoTwService;
 class QrzService;
 class QslService;
 class LogFilterBar;
-class QsoEntryPanel;
+class QsoQuickEntryPanel;
 class RadioPanel;
 class QsoTableModel;
 class RadioBackend;
@@ -79,6 +82,13 @@ private:
     // Wire a digital listener's signals to the entry panel and auto-log logic.
     void wireDigitalListener(DigitalListenerService *svc);
 
+    // Apply non-empty lookup result fields to any empty fields in qso.
+    // Used in the WSJT-X auto-log path where the panel may already be cleared.
+    static void applyLookupResult(Qso &qso, const CallsignLookupResult &r);
+
+    // Wire callsign lookup: debounce timer → QrzXmlLookupProvider → entry panel.
+    void wireCallsignLookup();
+
     // Returns true if any radio backend is currently connected.
     bool anyRadioConnected() const;
 
@@ -104,12 +114,17 @@ private:
     WsjtxService              *m_wsjtxService = nullptr;
     QList<DigitalListenerService*> m_digitalListeners;
 
+    // Callsign lookup
+    QrzXmlLookupProvider *m_lookupProvider       = nullptr;
+    QTimer               *m_callsignLookupTimer  = nullptr;
+    QString               m_pendingLookupCallsign;
+    CallsignLookupResult  m_cachedLookupResult;   // survives clearForm() for WSJT-X enrichment
+
     // Central layout
-    RadioPanel    *m_radioPanel = nullptr;
-    LogFilterBar  *m_filterBar  = nullptr;
-    QSplitter     *m_splitter   = nullptr;
-    QTableView    *m_logView    = nullptr;
-    QsoEntryPanel *m_entryPanel = nullptr;
+    RadioPanel           *m_radioPanel = nullptr;
+    QsoQuickEntryPanel   *m_entryPanel = nullptr;
+    LogFilterBar         *m_filterBar  = nullptr;
+    QTableView           *m_logView    = nullptr;
 
     // Status bar
     QLabel *m_hamlibIndicator  = nullptr;
@@ -123,6 +138,7 @@ private:
     void showStatusMessage(const QString &msg, int ms = 0);
 
     // Actions
+    QAction *m_newQsoAction          = nullptr;
     QAction *m_newLogAction          = nullptr;
     QAction *m_importAdifAction      = nullptr;
     QAction *m_exportAdifAction      = nullptr;

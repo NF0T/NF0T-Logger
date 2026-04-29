@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Ryan Butler (NF0T)
+#pragma once
+
+#include <QWidget>
+#include "core/logbook/Qso.h"
+#include "lookup/CallsignLookupResult.h"
+
+class QComboBox;
+class QDateTimeEdit;
+class QDoubleSpinBox;
+class QLabel;
+class QLineEdit;
+class QListWidget;
+class QNetworkAccessManager;
+class QNetworkReply;
+class QPushButton;
+
+/// Two-column quick QSO entry panel.
+///
+/// Left column: essential entry fields (datetime, callsign, band/freq, mode,
+/// RST, comment) plus Log / Full Entry / Clear actions.
+///
+/// Right column: callsign lookup results and previous-QSO history — populated
+/// by MainWindow via setPreviousQsos() and (in a later step) setLookupResult().
+class QsoQuickEntryPanel : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit QsoQuickEntryPanel(QWidget *parent = nullptr);
+
+    void setRadioFreq(double freqMhz);
+    void setRadioMode(const QString &mode, const QString &submode = {});
+    void setDxCall(const QString &call);
+    void setDxGrid(const QString &grid);
+
+    // Called by MainWindow with DB results for the current callsign (step 7).
+    void setPreviousQsos(const QList<Qso> &qsos, int total);
+
+    // Called by MainWindow when a callsign lookup is in progress or completes (step 6).
+    void setLookupStatus(const QString &status);
+    void setLookupResult(const CallsignLookupResult &result);
+
+    // Resets the right-column display and both data layers (lookup + station)
+    // without touching the entry fields. Called when the callsign field is cleared.
+    void clearLookupPanel();
+
+    // Fills empty fields in qso from the station layer then the lookup layer.
+    // Fields already set in qso are left untouched — the caller's data wins.
+    // Use this before saving any externally-provided QSO (e.g. from WSJT-X).
+    void enrichQso(Qso &qso) const;
+
+public slots:
+    void clearForm();
+
+signals:
+    void qsoReady(const Qso &qso);
+    void callsignChanged(const QString &callsign);
+    void fullEntryRequested(const Qso &partialQso);
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
+private slots:
+    void onModeChanged(int index);
+    void onFreqChanged(double freqMhz);
+    void onBandChanged(int index);
+    void onLogClicked();
+    void onNowClicked();
+
+private:
+    Qso  buildQso() const;
+    bool validate() const;
+    void applyStationDefaults(Qso &qso) const;
+    void updateRstDefaults();
+    void setFreqSilently(double freqMhz);
+    void setBandSilently(const QString &band);
+
+    // Left column — entry fields
+    QDateTimeEdit  *m_dateTime     = nullptr;
+    QPushButton    *m_nowBtn       = nullptr;
+    QLineEdit      *m_callsign     = nullptr;
+    QComboBox      *m_band         = nullptr;
+    QDoubleSpinBox *m_freq         = nullptr;
+    QComboBox      *m_mode         = nullptr;
+    QComboBox      *m_submode      = nullptr;
+    QLineEdit      *m_rstSent      = nullptr;
+    QLineEdit      *m_rstRcvd      = nullptr;
+    QLineEdit      *m_comment      = nullptr;
+    QPushButton    *m_fullEntryBtn = nullptr;
+    QPushButton    *m_logBtn       = nullptr;
+    QPushButton    *m_clearBtn     = nullptr;
+
+    // Right column — context panel
+    QLabel      *m_contactImage    = nullptr;
+    QLabel      *m_lookupLabel     = nullptr;
+    QLabel      *m_prevQsosHeader  = nullptr;
+    QListWidget *m_prevQsosList    = nullptr;
+
+    QPixmap m_fullPixmap;
+
+    QNetworkAccessManager *m_nam         = nullptr;
+    QNetworkReply         *m_imageReply  = nullptr;
+
+    // Two-layer data model for derived (non-widget) QSO fields:
+    //   m_lookupQso  — base layer populated by the callsign lookup service
+    //   m_stationQso — authoritative layer set by WSJT-X, future station sources, etc.
+    // buildQso() merges: station wins over lookup; both yield to widget values.
+    Qso m_lookupQso;
+    Qso m_stationQso;
+
+    bool m_suppressBandFreqSignals = false;
+};

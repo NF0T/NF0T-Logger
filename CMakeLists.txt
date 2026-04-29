@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NF0T-Logger
-    VERSION 0.1.0
+    VERSION 0.3.0
     DESCRIPTION "Amateur Radio Contact Logger"
     LANGUAGES CXX
 )

@@ -36,4 +36,5 @@ public:
     // Queries
     virtual std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) = 0;
     virtual std::expected<int,        QString> qsoCount() = 0;
+    virtual std::expected<int,        QString> countQsos(const QsoFilter &filter) = 0;
 };

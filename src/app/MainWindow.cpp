@@ -10,7 +10,6 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
@@ -33,6 +32,7 @@
 #include "wsjtx/WsjtxService.h"
 #include "core/adif/AdifParser.h"
 #include "core/logbook/QsoFilter.h"
+#include "database/DatabaseInterface.h"
 #include "core/adif/AdifWriter.h"
 #include "core/logbook/QsoTableModel.h"
 #include "core/Maidenhead.h"
@@ -48,8 +48,12 @@
 #include "radio/RadioBackend.h"
 #include "radio/TciBackend.h"
 #include "ui/RadioPanel.h"
-#include "ui/entrypanel/QsoEntryPanel.h"
-#include "ui/QsoEditDialog.h"
+#include "ui/entrypanel/QsoQuickEntryPanel.h"
+#include "ui/QsoFullEntryDialog.h"
+#include "lookup/CallsignLookupProvider.h"
+#include "lookup/CallsignLookupResult.h"
+#include "lookup/QrzXmlLookupProvider.h"
+#include "core/Callsign.h"
 #include "ui/LogFilterBar.h"
 #include "ui/WhatsNewDialog.h"
 
@@ -69,6 +73,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenuBar();
     setupCentralWidget();
     setupStatusBar();
+    wireCallsignLookup();
 
     // Restore window geometry before showing
     const QByteArray geo   = Settings::instance().mainWindowGeometry();
@@ -154,8 +159,6 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     Settings::instance().setMainWindowGeometry(saveGeometry());
     Settings::instance().setMainWindowState(saveState());
-    if (m_splitter)
-        Settings::instance().setSplitterState(m_splitter->saveState());
     QMainWindow::closeEvent(event);
 }
 
@@ -167,6 +170,21 @@ void MainWindow::setupMenuBar()
 {
     // --- File ---
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
+
+    m_newQsoAction = new QAction(tr("New &QSO…"), this);
+    connect(m_newQsoAction, &QAction::triggered, this, [this]() {
+        Qso qso;
+        const Settings &s = Settings::instance();
+        qso.stationCallsign = s.stationCallsign();
+        qso.antenna         = s.equipmentAntenna();
+        qso.rig             = s.equipmentRig();
+        const double pwr    = s.equipmentTxPwr();
+        if (pwr > 0.0) qso.txPwr = pwr;
+        QsoFullEntryDialog dlg(qso, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+        onQsoReady(dlg.qso());
+    });
+    fileMenu->addAction(m_newQsoAction);
 
     m_newLogAction = new QAction(tr("&New Log..."), this);
     m_newLogAction->setShortcut(QKeySequence::New);
@@ -248,12 +266,10 @@ void MainWindow::setupMenuBar()
 void MainWindow::setupCentralWidget()
 {
     m_radioPanel = new RadioPanel(this);
+    m_entryPanel = new QsoQuickEntryPanel(this);
 
-    m_splitter = new QSplitter(Qt::Vertical, this);
-
-    // Log table (top pane)
     m_logModel = new QsoTableModel(this);
-    m_logView  = new QTableView(m_splitter);
+    m_logView  = new QTableView(this);
 
     // Install grouped QSL header before setting the model
     auto *qslHeader = new QslGroupHeaderView(Qt::Horizontal, m_logView);
@@ -278,7 +294,6 @@ void MainWindow::setupCentralWidget()
         m_logView->setColumnWidth(c, 24);
     }
 
-    // Double-click to edit
     connect(m_logView, &QTableView::doubleClicked,
             this, &MainWindow::onEditQso);
 
@@ -319,22 +334,34 @@ void MainWindow::setupCentralWidget()
         }
     });
 
-    // Delete key shortcut
     auto *deleteShortcut = new QShortcut(QKeySequence::Delete, m_logView);
     connect(deleteShortcut, &QShortcut::activated, this, &MainWindow::onDeleteSelectedQso);
 
-    // Bottom pane — QSO entry panel
-    m_entryPanel = new QsoEntryPanel(m_splitter);
-    connect(m_entryPanel, &QsoEntryPanel::qsoReady, this, &MainWindow::onQsoReady);
+    connect(m_entryPanel, &QsoQuickEntryPanel::qsoReady,
+            this, &MainWindow::onQsoReady);
 
-    // Escape anywhere in the main window resets the entry panel
+    connect(m_entryPanel, &QsoQuickEntryPanel::fullEntryRequested,
+            this, [this](Qso partial) {
+        // Pre-populate station fields from settings so the Full Entry dialog
+        // shows sensible defaults — the user can still override them in the dialog.
+        const Settings &s = Settings::instance();
+        if (partial.stationCallsign.isEmpty()) partial.stationCallsign = s.stationCallsign();
+        if (partial.antenna.isEmpty())         partial.antenna          = s.equipmentAntenna();
+        if (partial.rig.isEmpty())             partial.rig              = s.equipmentRig();
+        if (!partial.txPwr.has_value()) {
+            const double pwr = s.equipmentTxPwr();
+            if (pwr > 0.0) partial.txPwr = pwr;
+        }
+
+        QsoFullEntryDialog dlg(partial, this);
+        if (dlg.exec() != QDialog::Accepted) return;
+        onQsoReady(dlg.qso());
+        m_entryPanel->clearForm();
+    });
+
     auto *escShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
-    connect(escShortcut, &QShortcut::activated, m_entryPanel, &QsoEntryPanel::clearForm);
-
-    m_splitter->addWidget(m_logView);
-    m_splitter->addWidget(m_entryPanel);
-    m_splitter->setStretchFactor(0, 3);
-    m_splitter->setStretchFactor(1, 1);
+    connect(escShortcut, &QShortcut::activated,
+            m_entryPanel, &QsoQuickEntryPanel::clearForm);
 
     m_filterBar = new LogFilterBar(this);
     connect(m_filterBar, &LogFilterBar::filterChanged,
@@ -345,8 +372,9 @@ void MainWindow::setupCentralWidget()
     vbox->setContentsMargins(0, 0, 0, 0);
     vbox->setSpacing(0);
     vbox->addWidget(m_radioPanel);
+    vbox->addWidget(m_entryPanel);
     vbox->addWidget(m_filterBar);
-    vbox->addWidget(m_splitter);
+    vbox->addWidget(m_logView, 1);
     setCentralWidget(container);
 }
 
@@ -659,11 +687,11 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
     QLabel *indicator = (backend == m_hamlibBackend) ? m_hamlibIndicator : m_tciIndicator;
 
     connect(backend, &RadioBackend::freqChanged,
-            m_entryPanel, &QsoEntryPanel::setRadioFreq);
+            m_entryPanel, &QsoQuickEntryPanel::setRadioFreq);
     connect(backend, &RadioBackend::freqChanged,
             m_radioPanel, &RadioPanel::setFrequency);
     connect(backend, &RadioBackend::modeChanged,
-            m_entryPanel, &QsoEntryPanel::setRadioMode);
+            m_entryPanel, &QsoQuickEntryPanel::setRadioMode);
     connect(backend, &RadioBackend::transmitChanged,
             m_radioPanel, &RadioPanel::setTransmitting);
 
@@ -730,11 +758,14 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
     });
 
     connect(svc, &DigitalListenerService::cleared,
-            m_entryPanel, &QsoEntryPanel::clearForm);
+            m_entryPanel, &QsoQuickEntryPanel::clearForm);
 
     connect(svc, &DigitalListenerService::qsoLogged,
-            this, [this](const Qso &qso) {
+            this, [this](Qso qso) {
         if (!Settings::instance().wsjtxAutoLog()) return;
+        // Use the MainWindow cache — the panel may already be cleared by a
+        // concurrent stationSelected("") Status packet from WSJT-X.
+        applyLookupResult(qso, m_cachedLookupResult);
         onQsoReady(qso);
         m_entryPanel->clearForm();
     });
@@ -746,6 +777,97 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
 
     if (svc->isEnabled())
         svc->start();
+}
+
+void MainWindow::wireCallsignLookup()
+{
+    m_lookupProvider      = new QrzXmlLookupProvider(this);
+    m_callsignLookupTimer = new QTimer(this);
+    m_callsignLookupTimer->setSingleShot(true);
+    m_callsignLookupTimer->setInterval(600);
+
+    connect(m_entryPanel, &QsoQuickEntryPanel::callsignChanged,
+            this, [this](const QString &callsign) {
+        m_pendingLookupCallsign = callsign;
+        if (callsign.isEmpty()) {
+            m_callsignLookupTimer->stop();
+            m_entryPanel->clearLookupPanel();
+            // Cache intentionally kept: a WSJT-X Status(empty) races qsoLogged;
+            // applyLookupResult() needs the cache after clearForm() wipes the panel.
+            // The cache is invalidated when a new callsign is entered (below).
+            return;
+        }
+        if (!Callsign::isValid(callsign)) {
+            m_callsignLookupTimer->stop();
+            return;
+        }
+        m_cachedLookupResult = {};   // stale for new callsign until result arrives
+        m_callsignLookupTimer->start();
+    });
+
+    connect(m_callsignLookupTimer, &QTimer::timeout, this, [this]() {
+        const QString typed = m_pendingLookupCallsign;
+        if (!Callsign::isValid(typed)) return;
+
+        const Callsign cs(typed);
+
+        // Network lookup — use base callsign so "VE3/W1AW/P" looks up W1AW
+        if (m_lookupProvider->isAvailable()) {
+            m_entryPanel->setLookupStatus(tr("Looking up %1…").arg(cs.base()));
+            m_lookupProvider->lookup(cs.base());
+        }
+
+        // Previous QSOs — exact match on typed callsign, real total count
+        if (m_db && m_db->isOpen()) {
+            QsoFilter f;
+            f.exactCall = typed;
+            f.limit     = 5;
+            if (auto res = m_db->fetchQsos(f)) {
+                int total = static_cast<int>(res->size());
+                QsoFilter cf;
+                cf.exactCall = typed;
+                if (auto cnt = m_db->countQsos(cf))
+                    total = *cnt;
+                m_entryPanel->setPreviousQsos(*res, total);
+            }
+        }
+    });
+
+    connect(m_lookupProvider, &CallsignLookupProvider::resultReady,
+            this, [this](const QString &callsign, const CallsignLookupResult &result) {
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
+        m_cachedLookupResult = result;   // keep a copy that survives clearForm()
+        m_entryPanel->setLookupResult(result);
+    });
+
+    connect(m_lookupProvider, &CallsignLookupProvider::lookupFailed,
+            this, [this](const QString &callsign, const QString &error) {
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
+        m_cachedLookupResult = {};
+        m_entryPanel->setLookupStatus(tr("Lookup failed: %1").arg(error));
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Static helpers
+// ---------------------------------------------------------------------------
+
+void MainWindow::applyLookupResult(Qso &qso, const CallsignLookupResult &r)
+{
+    auto ms = [](QString &f, const QString &v) { if (f.isEmpty() && !v.isEmpty()) f = v; };
+    auto mi = [](int    &f, int             v) { if (f == 0    && v  >  0      ) f = v; };
+    ms(qso.name,       r.name);
+    ms(qso.qth,        r.qth);
+    ms(qso.state,      r.state);
+    ms(qso.county,     r.county);
+    ms(qso.country,    r.country);
+    ms(qso.gridsquare, r.gridsquare);
+    ms(qso.cont,       r.cont);
+    mi(qso.dxcc,       r.dxcc);
+    mi(qso.cqZone,     r.cqZone);
+    mi(qso.ituZone,    r.ituZone);
+    if (!qso.lat.has_value() && r.lat.has_value()) qso.lat = r.lat;
+    if (!qso.lon.has_value() && r.lon.has_value()) qso.lon = r.lon;
 }
 
 // ---------------------------------------------------------------------------
@@ -825,10 +947,11 @@ void MainWindow::onEditQso(const QModelIndex &index)
     const int row = index.row();
     const Qso original = m_logModel->qsoAt(row);
 
-    QsoEditDialog dlg(original, this);
+    QsoFullEntryDialog dlg(original, this);
     if (dlg.exec() != QDialog::Accepted) return;
 
     Qso updated = dlg.qso();
+    enrichQso(updated);
     if (auto r = m_db->updateQso(updated); !r) {
         QMessageBox::warning(this, tr("Edit Failed"),
             tr("Could not save changes:\n%1").arg(r.error()));

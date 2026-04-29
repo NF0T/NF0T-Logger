@@ -10,7 +10,7 @@
 struct AdifWriterOptions {
     bool    includeHeader    = true;
     QString programId        = QStringLiteral("NF0T Logger");
-    QString programVersion   = QStringLiteral("0.1.0");
+    QString programVersion   = QStringLiteral(APP_VERSION);
     bool    includeAppFields = true;   // write APP_NF0T_* extensions (QRZ, ClubLog)
 };
 

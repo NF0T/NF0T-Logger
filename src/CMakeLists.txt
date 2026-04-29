@@ -11,19 +11,22 @@ set(SOURCES
     app/settings/pages/QslPage.cpp
     app/settings/pages/WsjtxPage.cpp
     app/settings/pages/DisplayPage.cpp
+    app/settings/pages/CallsignLookupPage.cpp
     core/logbook/QsoTableModel.cpp
     core/adif/AdifParser.cpp
     core/adif/AdifWriter.cpp
     core/BandPlan.cpp
+    core/Callsign.cpp
     core/Maidenhead.cpp
     ui/RadioPanel.cpp
-    ui/entrypanel/QsoEntryPanel.cpp
+    ui/entrypanel/QsoQuickEntryPanel.cpp
     ui/LogFilterBar.cpp
-    ui/QsoEditDialog.cpp
+    ui/QsoFullEntryDialog.cpp
     ui/WhatsNewDialog.cpp
     ui/QslColumns.cpp
     ui/QslDownloadDialog.cpp
     ui/QslUploadDialog.cpp
+    lookup/QrzXmlLookupProvider.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
     wsjtx/WsjtxService.cpp
@@ -49,21 +52,26 @@ set(HEADERS
     app/settings/pages/QslPage.h
     app/settings/pages/WsjtxPage.h
     app/settings/pages/DisplayPage.h
+    app/settings/pages/CallsignLookupPage.h
     core/logbook/Qso.h
     core/logbook/QsoFilter.h
     core/logbook/QsoTableModel.h
     core/adif/AdifParser.h
     core/adif/AdifWriter.h
     core/BandPlan.h
+    core/Callsign.h
     core/Maidenhead.h
     ui/RadioPanel.h
-    ui/entrypanel/QsoEntryPanel.h
+    ui/entrypanel/QsoQuickEntryPanel.h
     ui/LogFilterBar.h
-    ui/QsoEditDialog.h
+    ui/QsoFullEntryDialog.h
     ui/WhatsNewDialog.h
     ui/QslColumns.h
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
+    lookup/CallsignLookupResult.h
+    lookup/CallsignLookupProvider.h
+    lookup/QrzXmlLookupProvider.h
     radio/DigitalListenerService.h
     radio/HamlibBackend.h
     radio/RadioBackend.h

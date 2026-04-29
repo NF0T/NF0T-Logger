@@ -20,13 +20,9 @@
 #include "qsl/QslService.h"
 
 // ---------------------------------------------------------------------------
-// Mode normalisation
-//
-// Some services (eQSL) follow the ADIF spec strictly and return FT4 as
-// MODE=MFSK / SUBMODE=FT4.  Our entry panel stores FT4 as MODE=FT4 (a
-// common logger convention).  Normalise both to a canonical pair so the
-// matching logic handles either representation.
+// QSL confirmation matching helpers
 // ---------------------------------------------------------------------------
+
 // Resolve both ADIF-spec and common-logger representations of a mode to a
 // canonical (MODE, SUBMODE) pair so QSL matching is service-agnostic.
 //
@@ -67,6 +63,66 @@ static QPair<QString,QString> normaliseMode(const QString &mode, const QString &
     if (m == QLatin1String("CONTESTIA") || m == QLatin1String("CONTESTI")) return {"CONTESTI", s};
 
     return {m, s};
+}
+
+// Returns true if a normalised (mode, submode) pair from a QSL confirmation
+// is compatible with a normalised pair from the local log.
+//
+// Fuzzy rules handle service-specific mode representations:
+//   • LoTW DATA — catch-all for digital modes without a distinct LoTW code
+//     (FT4, JT65, JT9, WSPR, JS8, FST4, Q65, Olivia, …). Modes with explicit
+//     LoTW codes (CW, SSB, AM, FM, RTTY, FT8, PSK) are never reported as DATA.
+//   • No submode — eQSL and others sometimes omit the submode (e.g. MFSK with
+//     no FT4). Match if the parent modes agree.
+static bool modesCompatible(const QPair<QString,QString> &conf,
+                             const QPair<QString,QString> &local)
+{
+    if (conf == local) return true;
+    if (conf.first == QLatin1String("DATA")) {
+        static const QSet<QString> lotwNamed = {
+            QStringLiteral("CW"),  QStringLiteral("SSB"), QStringLiteral("AM"),
+            QStringLiteral("FM"),  QStringLiteral("RTTY"),QStringLiteral("FT8"),
+            QStringLiteral("PSK")
+        };
+        return !lotwNamed.contains(local.first);
+    }
+    // Either side may omit the submode while the other carries it — the logger
+    // may have stored only the parent mode, or the service may omit the submode.
+    // Match if the parent modes agree and at least one side has no submode.
+    if (conf.first == local.first && (conf.second.isEmpty() || local.second.isEmpty())) return true;
+    return false;
+}
+
+// Returns true if a local QSO matches a QSL confirmation.
+//
+// Criteria 1–3 and 5 are always required. Criterion 4 (time) is controlled
+// by requireTime — pass false to get a date/band/mode-only match when the
+// confirmation time is unavailable or known to be unreliable (e.g. eQSL
+// stores the other station's clock, which may differ by more than the window).
+//
+//   1. Callsign — case-insensitive exact match
+//   2. Band     — case-insensitive exact match
+//   3. UTC date — same calendar day
+//   4. UTC time — within ±5 minutes when the confirmation carries a real time
+//                 (not a midnight default) AND requireTime is true
+//   5. Mode     — normalised and fuzzy-matched via modesCompatible()
+static bool qsoMatchesConfirmation(const Qso &local, const Qso &conf,
+                                   bool requireTime = true)
+{
+    if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) return false;
+    if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) return false;
+
+    const QDateTime localUtc = local.datetimeOn.toUTC();
+    const QDateTime confUtc  = conf.datetimeOn.toUTC();
+    if (localUtc.date() != confUtc.date()) return false;
+
+    if (requireTime && confUtc.time() != QTime(0, 0)) {
+        if (qAbs(localUtc.secsTo(confUtc)) > 5 * 60) return false;
+    }
+
+    const auto [confMode,  confSub]  = normaliseMode(conf.mode,  conf.submode);
+    const auto [localMode, localSub] = normaliseMode(local.mode, local.submode);
+    return modesCompatible({confMode, confSub}, {localMode, localSub});
 }
 
 QslDownloadDialog::QslDownloadDialog(const QList<QslService*> &services,
@@ -232,18 +288,25 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
             const auto [confMode, confSub] = normaliseMode(conf.mode, conf.submode);
             const QString key = QStringLiteral("%1  %2  %3  %4")
                                     .arg(conf.callsign,
-                                         conf.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd")),
+                                         conf.datetimeOn.toUTC().toString(QStringLiteral("yyyy-MM-dd HH:mm")),
                                          conf.band, confMode + (confSub.isEmpty() ? QString() : QStringLiteral("/") + confSub));
 
-            bool found = false;
-            for (Qso local : m_localQsos) {
-                if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
-                if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0) continue;
-                if (local.datetimeOn.toUTC().date() != conf.datetimeOn.toUTC().date()) continue;
-                const auto [localMode, localSub] = normaliseMode(local.mode, local.submode);
-                if (localMode != confMode || localSub != confSub) continue;
+            // Two-pass: prefer a time-verified match; fall back to date/band/mode
+            // only if nothing time-matches (e.g. eQSL stores the other station's
+            // clock, which can differ by more than the ±5 min window).
+            auto findMatch = [&](bool requireTime) -> std::optional<Qso> {
+                for (const Qso &local : m_localQsos)
+                    if (qsoMatchesConfirmation(local, conf, requireTime))
+                        return local;
+                return std::nullopt;
+            };
+            auto localOpt = findMatch(true);
+            const bool timeVerified = localOpt.has_value();
+            if (!localOpt) localOpt = findMatch(false);
 
-                found = true;
+            const bool found = localOpt.has_value();
+            if (found) {
+                Qso local = *localOpt;
 
                 const bool alreadyLoTW = (conf.lotwQslRcvd == 'Y' && local.lotwQslRcvd == 'Y');
                 const bool alreadyEqsl = (conf.eqslQslRcvd == 'Y' && local.eqslQslRcvd == 'Y');
@@ -281,15 +344,38 @@ void QslDownloadDialog::onDownloadFinished(const QList<Qso> &confirmed,
                     if (!local.lon.has_value()      && conf.lon.has_value())      local.lon      = conf.lon;
                     if (!local.distance.has_value() && conf.distance.has_value()) local.distance = conf.distance;
 
-                    appendLog(tr("  %1 — new confirmation").arg(key));
+                    const QString note = timeVerified ? QString() : tr(" (time unverified)");
+                    appendLog(tr("  %1 — new confirmation%2").arg(key, note));
                     matched.append(local);
                     ++cntNew;
                 }
-                break;
             }
 
             if (!found) {
                 appendLog(tr("  %1 — no matching QSO in log").arg(key));
+                // Diagnostic: show why each same-callsign candidate failed
+                for (const Qso &local : m_localQsos) {
+                    if (local.callsign.compare(conf.callsign, Qt::CaseInsensitive) != 0) continue;
+                    const QDateTime lu = local.datetimeOn.toUTC();
+                    const QDateTime cu = conf.datetimeOn.toUTC();
+                    const auto [lm, ls] = normaliseMode(local.mode, local.submode);
+                    const QString localDesc = QStringLiteral("%1  %2  %3  %4")
+                        .arg(local.callsign,
+                             lu.toString(QStringLiteral("yyyy-MM-dd HH:mm")),
+                             local.band,
+                             lm + (ls.isEmpty() ? QString() : QStringLiteral("/") + ls));
+                    QStringList why;
+                    if (local.band.compare(conf.band, Qt::CaseInsensitive) != 0)
+                        why << QStringLiteral("band %1≠%2").arg(local.band, conf.band);
+                    if (lu.date() != cu.date())
+                        why << QStringLiteral("date %1≠%2").arg(lu.date().toString(), cu.date().toString());
+                    else if (cu.time() != QTime(0, 0))
+                        why << QStringLiteral("time diff %1s").arg(qAbs(lu.secsTo(cu)));
+                    if (!modesCompatible({confMode, confSub}, {lm, ls}))
+                        why << QStringLiteral("mode %1/%2≠%3/%4").arg(lm, ls, confMode, confSub);
+                    appendLog(QStringLiteral("    candidate: %1 [%2]").arg(
+                        localDesc, why.isEmpty() ? QStringLiteral("all match?") : why.join(QStringLiteral(", "))));
+                }
                 ++cntNotFound;
             }
         }

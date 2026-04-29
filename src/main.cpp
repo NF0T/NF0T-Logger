@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     //   macOS:   ~/Library/Preferences/NF0T.NF0T Logger.plist
     //   Windows: HKCU\Software\NF0T\NF0T Logger
     app.setApplicationName("NF0T Logger");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion(QStringLiteral(APP_VERSION));
     app.setOrganizationName("NF0T");
 
     // Begin async keychain load immediately — will be ready long before
