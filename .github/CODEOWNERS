@@ -1,0 +1,32 @@
+# Default owner for everything not matched below
+* @NF0T
+
+# Build system and CI
+CMakeLists.txt @NF0T
+src/CMakeLists.txt @NF0T
+.github/ @NF0T
+
+# Core data model and ADIF
+src/core/ @NF0T
+
+# Database backends
+src/database/ @NF0T
+
+# Callsign lookup providers — likely area for external contributions
+src/lookup/ @NF0T
+
+# Radio backends — likely area for external contributions
+src/radio/ @NF0T
+
+# Digital mode integrations — likely area for external contributions
+src/wsjtx/ @NF0T
+
+# QSL services — likely area for external contributions
+src/qsl/ @NF0T
+
+# UI
+src/ui/ @NF0T
+src/app/ @NF0T
+
+# Migration tools
+tools/ @NF0T
