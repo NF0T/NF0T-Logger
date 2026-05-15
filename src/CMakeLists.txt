@@ -22,6 +22,7 @@ set(SOURCES
     ui/entrypanel/QsoQuickEntryPanel.cpp
     ui/LogFilterBar.cpp
     ui/QsoFullEntryDialog.cpp
+    ui/NewLogDialog.cpp
     ui/WhatsNewDialog.cpp
     ui/QslColumns.cpp
     ui/QslDownloadDialog.cpp
@@ -65,6 +66,7 @@ set(HEADERS
     ui/entrypanel/QsoQuickEntryPanel.h
     ui/LogFilterBar.h
     ui/QsoFullEntryDialog.h
+    ui/NewLogDialog.h
     ui/WhatsNewDialog.h
     ui/QslColumns.h
     ui/QslDownloadDialog.h
