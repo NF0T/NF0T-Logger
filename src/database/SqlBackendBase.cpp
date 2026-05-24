@@ -314,6 +314,11 @@ std::expected<void, QString> SqlBackendBase::deleteQso(qint64 id)
     return {};
 }
 
+std::expected<void, QString> SqlBackendBase::clearQsos()
+{
+    return execQuery(QStringLiteral("DELETE FROM qsos"));
+}
+
 static void buildWhereClause(const QsoFilter &filter,
                              QStringList &where, QVariantMap &binds)
 {

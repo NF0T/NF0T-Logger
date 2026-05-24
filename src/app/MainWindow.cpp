@@ -55,6 +55,7 @@
 #include "lookup/QrzXmlLookupProvider.h"
 #include "core/Callsign.h"
 #include "ui/LogFilterBar.h"
+#include "ui/NewLogDialog.h"
 #include "ui/WhatsNewDialog.h"
 
 #include <algorithm>
@@ -99,6 +100,9 @@ MainWindow::MainWindow(QWidget *parent)
     }
 
     openDefaultDatabase();
+
+    if (Settings::instance().dbBackend() == QLatin1String("mariadb"))
+        m_newLogAction->setEnabled(false);
 
     // Radio backends — wire generically, then auto-connect if configured
     m_hamlibBackend = new HamlibBackend(this);
@@ -504,7 +508,30 @@ void MainWindow::updateQsoCount()
 
 void MainWindow::onNewLog()
 {
-    QMessageBox::information(this, tr("New Log"), tr("New log functionality coming soon."));
+    if (!m_db) return;
+
+    NewLogDialog dlg(this);
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    if (dlg.mode() == NewLogDialog::Mode::Archive) {
+        const QList<Qso> qsos = m_db->fetchQsos().value_or(QList<Qso>{});
+        AdifWriter::Options opts;
+        if (!AdifWriter::writeFile(dlg.exportPath(), qsos, opts)) {
+            QMessageBox::critical(this, tr("New Log"),
+                tr("Failed to write archive file:\n%1").arg(dlg.exportPath()));
+            return;
+        }
+    }
+
+    if (auto r = m_db->clearQsos(); !r) {
+        QMessageBox::critical(this, tr("New Log"),
+            tr("Failed to clear the log:\n%1").arg(r.error()));
+        return;
+    }
+
+    reloadLog();
+    showStatusMessage(tr("Log cleared."), 4000);
 }
 
 // Derive missing lat/lon from gridsquare and compute distance from my station.

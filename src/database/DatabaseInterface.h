@@ -33,6 +33,9 @@ public:
     virtual std::expected<void,   QString> updateQso(const Qso &qso) = 0;
     virtual std::expected<void,   QString> deleteQso(qint64 id) = 0;
 
+    /// Delete all QSO records while preserving the schema. Used by File → New Log.
+    virtual std::expected<void,   QString> clearQsos() = 0;
+
     // Queries
     virtual std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) = 0;
     virtual std::expected<int,        QString> qsoCount() = 0;
