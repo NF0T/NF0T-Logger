@@ -52,6 +52,26 @@ The schema (tables, migrations) is preserved; only QSO records are removed. This
 
 ---
 
+## v26.XX.1 — Switch to Calendar Versioning (CalVer)
+
+Starting with the first release after v0.4.0, NF0T Logger will adopt **CalVer** versioning in the form `YY.MM.MICRO`, with an optional 4th segment for hotfixes:
+
+| Tag | Meaning |
+|---|---|
+| `v26.6.1` | First release of June 2026 |
+| `v26.6.2` | Second release of June 2026 |
+| `v26.6.1.1` | Hotfix against the first June 2026 release |
+
+### Changes required
+
+- **`CMakeLists.txt`** — update `project(NF0T-Logger VERSION ...)` to the CalVer string at each release; CMake's 4-component integer version format is compatible with `YY.MM.MICRO.PATCH`
+- **Release Drafter** — remove the `version-resolver` block from `.github/release-drafter.yml`; under CalVer the version is set explicitly at release time rather than derived from PR labels
+- **ROADMAP.md** — future milestones will use CalVer identifiers rather than `vX.Y.Z` placeholders
+
+Existing tags (`v0.1.0` through `v0.4.0`) remain unchanged in git history.
+
+---
+
 ## vX.X.0 — Release Packaging and Distribution
 
 Produce signed, self-contained installer/image artifacts and attach them to every GitHub release.
