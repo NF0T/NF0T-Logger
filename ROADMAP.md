@@ -34,7 +34,7 @@ Tabbed modal dialog with six sections — Contact, Activity (SOTA/POTA/WWFF/IOTA
 
 ---
 
-## v0.4.0 — New Log / Log Rotation
+## v0.4.0 — New Log / Log Rotation ✓ shipped
 
 Implements the **File → New Log** menu item, which currently shows a placeholder dialog.
 
