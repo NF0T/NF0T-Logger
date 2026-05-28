@@ -3,6 +3,12 @@ name: Release Drafter
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'CalVer release version (e.g. 26.6.1)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,5 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: release-drafter/release-drafter@v7.2.0
+        with:
+          version: ${{ github.event.inputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
