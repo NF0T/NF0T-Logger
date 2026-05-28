@@ -319,6 +319,27 @@ std::expected<void, QString> SqlBackendBase::clearQsos()
     return execQuery(QStringLiteral("DELETE FROM qsos"));
 }
 
+std::expected<void, QString> SqlBackendBase::beginTransaction()
+{
+    if (!m_db.transaction())
+        return std::unexpected(m_db.lastError().text());
+    return {};
+}
+
+std::expected<void, QString> SqlBackendBase::commitTransaction()
+{
+    if (!m_db.commit())
+        return std::unexpected(m_db.lastError().text());
+    return {};
+}
+
+std::expected<void, QString> SqlBackendBase::rollbackTransaction()
+{
+    if (!m_db.rollback())
+        return std::unexpected(m_db.lastError().text());
+    return {};
+}
+
 static void buildWhereClause(const QsoFilter &filter,
                              QStringList &where, QVariantMap &binds)
 {

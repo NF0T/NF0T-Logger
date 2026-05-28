@@ -110,7 +110,7 @@ A new `.github/workflows/release.yml` triggers on `v*` tag pushes (separate from
 
 ---
 
-## v26.XX.N — Database Migration Tool
+## v26.XX.N — Database Migration Tool ✓ shipped
 
 Allow users to move their logbook between the SQLite and MariaDB backends without going through an intermediate ADIF export/import.
 

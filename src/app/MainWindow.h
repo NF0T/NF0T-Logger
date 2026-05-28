@@ -15,6 +15,7 @@ class QLabel;
 class QTableView;
 class QTimer;
 
+class MigrateDatabaseDialog;
 class QsoFullEntryDialog;
 class CtyDatLookupProvider;
 class QrzXmlLookupProvider;
@@ -62,6 +63,8 @@ private slots:
     // QSL
     void onQslDownload();
     void onQslUpload();
+    // Tools
+    void onMigrateDatabase();
 
 private:
     // QSL helpers — apply confirmed/updated QSOs to the database
@@ -86,6 +89,9 @@ private:
     // Apply non-empty lookup result fields to any empty fields in qso.
     // Used in the WSJT-X auto-log path where the panel may already be cleared.
     static void applyLookupResult(Qso &qso, const CallsignLookupResult &r);
+
+    // Disable/enable UI entry points while a database migration is running.
+    void setMigrationLock(bool locked);
 
     // Merge a QRZ result on top of a CTY.dat result following precedence rules:
     // CTY.dat is authoritative for zone/DXCC/entity; QRZ fills personal data
@@ -145,16 +151,21 @@ private:
     static void setIndicatorState(QLabel *indicator, IndicatorState state);
     void showStatusMessage(const QString &msg, int ms = 0);
 
+    bool m_migrationLock = false;
+
     // Actions
-    QAction *m_newQsoAction          = nullptr;
-    QAction *m_newLogAction          = nullptr;
-    QAction *m_importAdifAction      = nullptr;
-    QAction *m_exportAdifAction      = nullptr;
-    QAction *m_exitAction            = nullptr;
-    QAction *m_settingsAction        = nullptr;
-    QAction *m_aboutAction           = nullptr;
-    QAction *m_whatsNewAction        = nullptr;
-    QAction *m_connectHamlibAction   = nullptr;
-    QAction *m_connectTciAction      = nullptr;
-    QAction *m_disconnectRadioAction = nullptr;
+    QAction *m_newQsoAction            = nullptr;
+    QAction *m_newLogAction            = nullptr;
+    QAction *m_importAdifAction        = nullptr;
+    QAction *m_exportAdifAction        = nullptr;
+    QAction *m_exitAction              = nullptr;
+    QAction *m_settingsAction          = nullptr;
+    QAction *m_aboutAction             = nullptr;
+    QAction *m_whatsNewAction          = nullptr;
+    QAction *m_connectHamlibAction     = nullptr;
+    QAction *m_connectTciAction        = nullptr;
+    QAction *m_disconnectRadioAction   = nullptr;
+    QAction *m_qslDownloadAction       = nullptr;
+    QAction *m_qslUploadAction         = nullptr;
+    QAction *m_migrateDatabaseAction   = nullptr;
 };

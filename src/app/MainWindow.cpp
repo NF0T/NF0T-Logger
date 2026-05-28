@@ -63,6 +63,7 @@
 #include "ui/QslColumns.h"
 #include "ui/QslDownloadDialog.h"
 #include "ui/QslUploadDialog.h"
+#include "ui/MigrateDatabaseDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -243,16 +244,24 @@ void MainWindow::setupMenuBar()
     // --- QSL ---
     QMenu *qslMenu = menuBar()->addMenu(tr("&QSL"));
 
-    auto *qslDownloadAction = new QAction(tr("&Download QSL..."), this);
-    qslDownloadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+D")));
-    connect(qslDownloadAction, &QAction::triggered, this, &MainWindow::onQslDownload);
+    m_qslDownloadAction = new QAction(tr("&Download QSL..."), this);
+    m_qslDownloadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+D")));
+    connect(m_qslDownloadAction, &QAction::triggered, this, &MainWindow::onQslDownload);
 
-    auto *qslUploadAction = new QAction(tr("&Upload QSL..."), this);
-    qslUploadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+U")));
-    connect(qslUploadAction, &QAction::triggered, this, &MainWindow::onQslUpload);
+    m_qslUploadAction = new QAction(tr("&Upload QSL..."), this);
+    m_qslUploadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+U")));
+    connect(m_qslUploadAction, &QAction::triggered, this, &MainWindow::onQslUpload);
 
-    qslMenu->addAction(qslDownloadAction);
-    qslMenu->addAction(qslUploadAction);
+    qslMenu->addAction(m_qslDownloadAction);
+    qslMenu->addAction(m_qslUploadAction);
+
+    // --- Tools ---
+    QMenu *toolsMenu = menuBar()->addMenu(tr("&Tools"));
+
+    m_migrateDatabaseAction = new QAction(tr("&Migrate Database…"), this);
+    connect(m_migrateDatabaseAction, &QAction::triggered,
+            this, &MainWindow::onMigrateDatabase);
+    toolsMenu->addAction(m_migrateDatabaseAction);
 
     // --- Help ---
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
@@ -451,8 +460,8 @@ void MainWindow::openDefaultDatabase()
         config = {
             {"host",     cfg.dbMariadbHost()},
             {"port",     cfg.dbMariadbPort()},
-            {"name",     cfg.dbMariadbDatabase()},
-            {"user",     cfg.dbMariadbUsername()},
+            {"database", cfg.dbMariadbDatabase()},
+            {"username", cfg.dbMariadbUsername()},
             {"password", cfg.dbMariadbPassword()},
         };
         backend = std::make_unique<MariaDbBackend>();
@@ -501,6 +510,58 @@ void MainWindow::updateQsoCount()
         m_qsoCountLabel->setText(tr("QSOs: %1 of %2").arg(m_logModel->rowCount()).arg(total));
     else
         m_qsoCountLabel->setText(tr("QSOs: %1").arg(total));
+}
+
+void MainWindow::setMigrationLock(bool locked)
+{
+    m_migrationLock = locked;
+    m_entryPanel->setEnabled(!locked);
+    m_newQsoAction->setEnabled(!locked);
+    m_newLogAction->setEnabled(!locked &&
+        Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_qslDownloadAction->setEnabled(!locked);
+    m_qslUploadAction->setEnabled(!locked);
+    m_migrateDatabaseAction->setEnabled(!locked);
+
+    for (DigitalListenerService *svc : m_digitalListeners) {
+        if (locked  && svc->isRunning())  svc->stop();
+        if (!locked && svc->isEnabled())  svc->start();
+    }
+}
+
+void MainWindow::onMigrateDatabase()
+{
+    if (!m_db) return;
+
+    setMigrationLock(true);
+
+    MigrateDatabaseDialog dlg(m_db.get(), this);
+    dlg.exec();
+
+    if (dlg.shouldSwitchBackend()) {
+        Settings &s = Settings::instance();
+        const QVariantMap cfg = dlg.targetConfig();
+
+        if (dlg.targetBackendKey() == QLatin1String("sqlite")) {
+            s.setDbBackend(QStringLiteral("sqlite"));
+            s.setDbSqlitePath(cfg.value("path").toString());
+        } else {
+            s.setDbBackend(QStringLiteral("mariadb"));
+            s.setDbMariadbHost    (cfg.value("host").toString());
+            s.setDbMariadbPort    (cfg.value("port").toInt());
+            s.setDbMariadbDatabase(cfg.value("database").toString());
+            s.setDbMariadbUsername(cfg.value("username").toString());
+            s.setDbMariadbPassword(cfg.value("password").toString());
+        }
+
+        m_db.reset();
+        openDefaultDatabase();
+
+        const bool isMariadb = (s.dbBackend() == QLatin1String("mariadb"));
+        m_newLogAction->setEnabled(!isMariadb);
+    }
+
+    setMigrationLock(false);
 }
 
 // ---------------------------------------------------------------------------
@@ -1002,7 +1063,7 @@ void MainWindow::applyDownloadedConfirmations(const QList<Qso> &matched,
 
 void MainWindow::onQsoReady(const Qso &qso)
 {
-    if (!m_db) return;
+    if (!m_db || m_migrationLock) return;
 
     Qso inserted = qso;
     enrichQso(inserted);

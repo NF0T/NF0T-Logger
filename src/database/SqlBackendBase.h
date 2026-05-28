@@ -26,6 +26,10 @@ public:
     std::expected<void,   QString> updateQso(const Qso &qso)     override;
     std::expected<void,   QString> deleteQso(qint64 id)          override;
     std::expected<void,   QString> clearQsos()                   override;
+
+    std::expected<void, QString> beginTransaction()    override;
+    std::expected<void, QString> commitTransaction()   override;
+    std::expected<void, QString> rollbackTransaction() override;
     std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) override;
     std::expected<int,        QString> qsoCount()                override;
     std::expected<int,        QString> countQsos(const QsoFilter &filter)    override;

@@ -27,6 +27,7 @@ set(SOURCES
     ui/QslColumns.cpp
     ui/QslDownloadDialog.cpp
     ui/QslUploadDialog.cpp
+    ui/MigrateDatabaseDialog.cpp
     lookup/QrzXmlLookupProvider.cpp
     lookup/CtyDatLookupProvider.cpp
     radio/HamlibBackend.cpp
@@ -72,6 +73,7 @@ set(HEADERS
     ui/QslColumns.h
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
+    ui/MigrateDatabaseDialog.h
     lookup/CallsignLookupResult.h
     lookup/CallsignLookupProvider.h
     lookup/QrzXmlLookupProvider.h
