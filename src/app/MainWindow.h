@@ -16,6 +16,7 @@ class QTableView;
 class QTimer;
 
 class QsoFullEntryDialog;
+class CtyDatLookupProvider;
 class QrzXmlLookupProvider;
 class ClubLogService;
 class DatabaseInterface;
@@ -86,7 +87,13 @@ private:
     // Used in the WSJT-X auto-log path where the panel may already be cleared.
     static void applyLookupResult(Qso &qso, const CallsignLookupResult &r);
 
-    // Wire callsign lookup: debounce timer → QrzXmlLookupProvider → entry panel.
+    // Merge a QRZ result on top of a CTY.dat result following precedence rules:
+    // CTY.dat is authoritative for zone/DXCC/entity; QRZ fills personal data
+    // and overrides lat/lon/gridsquare with the operator's precise location.
+    static CallsignLookupResult mergeQrzIntoCty(const CallsignLookupResult &base,
+                                                const CallsignLookupResult &qrz);
+
+    // Wire callsign lookup: CTY.dat (immediate) + QRZ debounce → entry panel.
     void wireCallsignLookup();
 
     // Returns true if any radio backend is currently connected.
@@ -115,7 +122,8 @@ private:
     QList<DigitalListenerService*> m_digitalListeners;
 
     // Callsign lookup
-    QrzXmlLookupProvider *m_lookupProvider       = nullptr;
+    CtyDatLookupProvider *m_ctyProvider          = nullptr;
+    QrzXmlLookupProvider *m_qrzProvider          = nullptr;
     QTimer               *m_callsignLookupTimer  = nullptr;
     QString               m_pendingLookupCallsign;
     CallsignLookupResult  m_cachedLookupResult;   // survives clearForm() for WSJT-X enrichment
