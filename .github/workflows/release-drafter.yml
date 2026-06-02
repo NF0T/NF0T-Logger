@@ -17,8 +17,16 @@ jobs:
   update_release_draft:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Extract CalVer from CMakeLists.txt
+        id: calver
+        run: |
+          VERSION=$(grep -m1 'VERSION [0-9]' CMakeLists.txt | grep -oP '\d+\.\d+\.\d+(\.\d+)?')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - uses: release-drafter/release-drafter@v7.2.0
         with:
-          version: ${{ github.event.inputs.version }}
+          version: ${{ github.event.inputs.version || steps.calver.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
