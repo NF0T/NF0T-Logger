@@ -1,5 +1,5 @@
-name-template: 'v$INPUT_VERSION'
-tag-template: 'v$INPUT_VERSION'
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
 
 categories:
   - title: '🚨 Breaking Changes'
@@ -34,4 +34,4 @@ template: |
   $CHANGES
 
   ---
-  **Full Changelog**: https://github.com/NF0T/NF0T-Logger/compare/$PREVIOUS_TAG...v$INPUT_VERSION
+  **Full Changelog**: https://github.com/NF0T/NF0T-Logger/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
