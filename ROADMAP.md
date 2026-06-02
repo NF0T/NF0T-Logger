@@ -110,7 +110,7 @@ A new `.github/workflows/release.yml` triggers on `v*` tag pushes (separate from
 
 ---
 
-## v26.XX.N — Database Migration Tool ✓ shipped
+## v26.6.1 — Database Migration Tool ✓ shipped
 
 Allow users to move their logbook between the SQLite and MariaDB backends without going through an intermediate ADIF export/import.
 
@@ -148,7 +148,7 @@ The locked state is lifted only after the target backend is closed and the dialo
 
 ---
 
-## v26.XX.N — CTY.dat Offline DXCC Lookup
+## v26.6.1 — CTY.dat Offline DXCC Lookup ✓ shipped
 
 Add a `CallsignLookupProvider` backed by the [CTY.dat country file](https://www.country-files.com/cty-dat-format/) (Jim Reisert AD1C / Big Cty). CTY.dat is the de-facto standard offline DXCC/zone/continent database used by CT, N1MM, and most contest loggers, and is updated several times per year as DXCC entities change.
 
