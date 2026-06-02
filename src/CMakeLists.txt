@@ -27,7 +27,9 @@ set(SOURCES
     ui/QslColumns.cpp
     ui/QslDownloadDialog.cpp
     ui/QslUploadDialog.cpp
+    ui/MigrateDatabaseDialog.cpp
     lookup/QrzXmlLookupProvider.cpp
+    lookup/CtyDatLookupProvider.cpp
     radio/HamlibBackend.cpp
     radio/TciBackend.cpp
     wsjtx/WsjtxService.cpp
@@ -71,9 +73,11 @@ set(HEADERS
     ui/QslColumns.h
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
+    ui/MigrateDatabaseDialog.h
     lookup/CallsignLookupResult.h
     lookup/CallsignLookupProvider.h
     lookup/QrzXmlLookupProvider.h
+    lookup/CtyDatLookupProvider.h
     radio/DigitalListenerService.h
     radio/HamlibBackend.h
     radio/RadioBackend.h
@@ -99,6 +103,13 @@ qt_add_resources(NF0T-Logger "app_resources"
     PREFIX "/"
     FILES
         resources/icons/nf0t-logger.svg
+)
+
+qt_add_resources(NF0T-Logger "data_resources"
+    PREFIX "/data"
+    BASE "${CMAKE_SOURCE_DIR}/data"
+    FILES
+        "${CMAKE_SOURCE_DIR}/data/cty.dat"
 )
 
 target_include_directories(NF0T-Logger PRIVATE

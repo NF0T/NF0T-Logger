@@ -15,7 +15,9 @@ class QLabel;
 class QTableView;
 class QTimer;
 
+class MigrateDatabaseDialog;
 class QsoFullEntryDialog;
+class CtyDatLookupProvider;
 class QrzXmlLookupProvider;
 class ClubLogService;
 class DatabaseInterface;
@@ -61,6 +63,8 @@ private slots:
     // QSL
     void onQslDownload();
     void onQslUpload();
+    // Tools
+    void onMigrateDatabase();
 
 private:
     // QSL helpers — apply confirmed/updated QSOs to the database
@@ -86,7 +90,16 @@ private:
     // Used in the WSJT-X auto-log path where the panel may already be cleared.
     static void applyLookupResult(Qso &qso, const CallsignLookupResult &r);
 
-    // Wire callsign lookup: debounce timer → QrzXmlLookupProvider → entry panel.
+    // Disable/enable UI entry points while a database migration is running.
+    void setMigrationLock(bool locked);
+
+    // Merge a QRZ result on top of a CTY.dat result following precedence rules:
+    // CTY.dat is authoritative for zone/DXCC/entity; QRZ fills personal data
+    // and overrides lat/lon/gridsquare with the operator's precise location.
+    static CallsignLookupResult mergeQrzIntoCty(const CallsignLookupResult &base,
+                                                const CallsignLookupResult &qrz);
+
+    // Wire callsign lookup: CTY.dat (immediate) + QRZ debounce → entry panel.
     void wireCallsignLookup();
 
     // Returns true if any radio backend is currently connected.
@@ -115,7 +128,8 @@ private:
     QList<DigitalListenerService*> m_digitalListeners;
 
     // Callsign lookup
-    QrzXmlLookupProvider *m_lookupProvider       = nullptr;
+    CtyDatLookupProvider *m_ctyProvider          = nullptr;
+    QrzXmlLookupProvider *m_qrzProvider          = nullptr;
     QTimer               *m_callsignLookupTimer  = nullptr;
     QString               m_pendingLookupCallsign;
     CallsignLookupResult  m_cachedLookupResult;   // survives clearForm() for WSJT-X enrichment
@@ -137,16 +151,21 @@ private:
     static void setIndicatorState(QLabel *indicator, IndicatorState state);
     void showStatusMessage(const QString &msg, int ms = 0);
 
+    bool m_migrationLock = false;
+
     // Actions
-    QAction *m_newQsoAction          = nullptr;
-    QAction *m_newLogAction          = nullptr;
-    QAction *m_importAdifAction      = nullptr;
-    QAction *m_exportAdifAction      = nullptr;
-    QAction *m_exitAction            = nullptr;
-    QAction *m_settingsAction        = nullptr;
-    QAction *m_aboutAction           = nullptr;
-    QAction *m_whatsNewAction        = nullptr;
-    QAction *m_connectHamlibAction   = nullptr;
-    QAction *m_connectTciAction      = nullptr;
-    QAction *m_disconnectRadioAction = nullptr;
+    QAction *m_newQsoAction            = nullptr;
+    QAction *m_newLogAction            = nullptr;
+    QAction *m_importAdifAction        = nullptr;
+    QAction *m_exportAdifAction        = nullptr;
+    QAction *m_exitAction              = nullptr;
+    QAction *m_settingsAction          = nullptr;
+    QAction *m_aboutAction             = nullptr;
+    QAction *m_whatsNewAction          = nullptr;
+    QAction *m_connectHamlibAction     = nullptr;
+    QAction *m_connectTciAction        = nullptr;
+    QAction *m_disconnectRadioAction   = nullptr;
+    QAction *m_qslDownloadAction       = nullptr;
+    QAction *m_qslUploadAction         = nullptr;
+    QAction *m_migrateDatabaseAction   = nullptr;
 };

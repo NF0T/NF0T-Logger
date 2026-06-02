@@ -5,7 +5,10 @@
 #include "SettingsPage.h"
 
 class QCheckBox;
+class QLabel;
 class QLineEdit;
+class QNetworkAccessManager;
+class QPushButton;
 
 class CallsignLookupPage : public SettingsPage
 {
@@ -18,8 +21,21 @@ public:
     void load()  override;
     void apply() override;
 
+private slots:
+    void onUpdateCtyDat();
+
 private:
-    QCheckBox *m_enabled        = nullptr;
+    void refreshCtyStatus();
+
+    // QRZ XML
+    QCheckBox *m_qrzEnabled     = nullptr;
     QLineEdit *m_qrzXmlUsername = nullptr;
     QLineEdit *m_qrzXmlPassword = nullptr;
+
+    // CTY.dat
+    QCheckBox  *m_ctyEnabled     = nullptr;
+    QLabel     *m_ctyStatusLabel = nullptr;
+    QPushButton *m_ctyUpdateBtn  = nullptr;
+
+    QNetworkAccessManager *m_nam = nullptr;
 };

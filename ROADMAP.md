@@ -52,7 +52,7 @@ The schema (tables, migrations) is preserved; only QSO records are removed. This
 
 ---
 
-## v26.XX.1 — Switch to Calendar Versioning (CalVer)
+## v26.6.1 — Switch to Calendar Versioning ✓ shipped (CalVer)
 
 Starting with the first release after v0.4.0, NF0T Logger will adopt **CalVer** versioning in the form `YY.MM.MICRO`, with an optional 4th segment for hotfixes:
 
@@ -68,11 +68,11 @@ Starting with the first release after v0.4.0, NF0T Logger will adopt **CalVer** 
 - **Release Drafter** — remove the `version-resolver` block from `.github/release-drafter.yml`; under CalVer the version is set explicitly at release time rather than derived from PR labels
 - **ROADMAP.md** — future milestones will use CalVer identifiers rather than `vX.Y.Z` placeholders
 
-Existing tags (`v0.1.0` through `v0.4.0`) remain unchanged in git history.
+Existing tags (`v0.1.0` through `v0.4.0`) remain unchanged in git history. The switch took effect with `v26.6.1`.
 
 ---
 
-## vX.X.0 — Release Packaging and Distribution
+## v26.XX.N — Release Packaging and Distribution
 
 Produce signed, self-contained installer/image artifacts and attach them to every GitHub release.
 
@@ -110,7 +110,7 @@ A new `.github/workflows/release.yml` triggers on `v*` tag pushes (separate from
 
 ---
 
-## vX.X.0 — Database Migration Tool
+## v26.6.1 — Database Migration Tool ✓ shipped
 
 Allow users to move their logbook between the SQLite and MariaDB backends without going through an intermediate ADIF export/import.
 
@@ -148,7 +148,7 @@ The locked state is lifted only after the target backend is closed and the dialo
 
 ---
 
-## vX.X.0 — CTY.dat Offline DXCC Lookup
+## v26.6.1 — CTY.dat Offline DXCC Lookup ✓ shipped
 
 Add a `CallsignLookupProvider` backed by the [CTY.dat country file](https://www.country-files.com/cty-dat-format/) (Jim Reisert AD1C / Big Cty). CTY.dat is the de-facto standard offline DXCC/zone/continent database used by CT, N1MM, and most contest loggers, and is updated several times per year as DXCC entities change.
 

@@ -1,5 +1,5 @@
-name-template: 'v$RESOLVED_VERSION'
-tag-template: 'v$RESOLVED_VERSION'
+name-template: 'v$INPUT_VERSION'
+tag-template: 'v$INPUT_VERSION'
 
 categories:
   - title: '🚨 Breaking Changes'
@@ -28,19 +28,10 @@ categories:
 change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
 change-title-escapes: '\<*_&'
 
-version-resolver:
-  major:
-    labels: ['breaking-change']
-  minor:
-    labels: ['enhancement', 'feature']
-  patch:
-    labels: ['bug', 'fix', 'chore', 'documentation', 'build', 'ci']
-  default: patch
-
 template: |
   ## What's Changed
 
   $CHANGES
 
   ---
-  **Full Changelog**: https://github.com/NF0T/NF0T-Logger/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+  **Full Changelog**: https://github.com/NF0T/NF0T-Logger/compare/$PREVIOUS_TAG...v$INPUT_VERSION

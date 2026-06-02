@@ -314,6 +314,12 @@ void Settings::setQrzXmlUsername(const QString &v)  { put("lookup/qrzxml/usernam
 QString Settings::qrzXmlPassword() const            { return SecureSettings::instance().get(SecureKey::QRZ_XML_PASSWORD); }
 void Settings::setQrzXmlPassword(const QString &v)  { SecureSettings::instance().set(SecureKey::QRZ_XML_PASSWORD, v); }
 
+bool Settings::ctyDatEnabled() const               { return get("lookup/ctydat/enabled", true); }
+void Settings::setCtyDatEnabled(bool v)             { put("lookup/ctydat/enabled", v); }
+
+QString Settings::ctyDatCustomPath() const          { return get("lookup/ctydat/custom_path", QString()); }
+void Settings::setCtyDatCustomPath(const QString &v){ put("lookup/ctydat/custom_path", v); }
+
 // ---------------------------------------------------------------------------
 // UI state
 // ---------------------------------------------------------------------------

@@ -36,6 +36,11 @@ public:
     /// Delete all QSO records while preserving the schema. Used by File → New Log.
     virtual std::expected<void,   QString> clearQsos() = 0;
 
+    // Transactions
+    virtual std::expected<void, QString> beginTransaction()    = 0;
+    virtual std::expected<void, QString> commitTransaction()   = 0;
+    virtual std::expected<void, QString> rollbackTransaction() = 0;
+
     // Queries
     virtual std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) = 0;
     virtual std::expected<int,        QString> qsoCount() = 0;

@@ -52,6 +52,7 @@
 #include "ui/QsoFullEntryDialog.h"
 #include "lookup/CallsignLookupProvider.h"
 #include "lookup/CallsignLookupResult.h"
+#include "lookup/CtyDatLookupProvider.h"
 #include "lookup/QrzXmlLookupProvider.h"
 #include "core/Callsign.h"
 #include "ui/LogFilterBar.h"
@@ -62,6 +63,7 @@
 #include "ui/QslColumns.h"
 #include "ui/QslDownloadDialog.h"
 #include "ui/QslUploadDialog.h"
+#include "ui/MigrateDatabaseDialog.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -242,16 +244,24 @@ void MainWindow::setupMenuBar()
     // --- QSL ---
     QMenu *qslMenu = menuBar()->addMenu(tr("&QSL"));
 
-    auto *qslDownloadAction = new QAction(tr("&Download QSL..."), this);
-    qslDownloadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+D")));
-    connect(qslDownloadAction, &QAction::triggered, this, &MainWindow::onQslDownload);
+    m_qslDownloadAction = new QAction(tr("&Download QSL..."), this);
+    m_qslDownloadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+D")));
+    connect(m_qslDownloadAction, &QAction::triggered, this, &MainWindow::onQslDownload);
 
-    auto *qslUploadAction = new QAction(tr("&Upload QSL..."), this);
-    qslUploadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+U")));
-    connect(qslUploadAction, &QAction::triggered, this, &MainWindow::onQslUpload);
+    m_qslUploadAction = new QAction(tr("&Upload QSL..."), this);
+    m_qslUploadAction->setShortcut(QKeySequence(tr("Ctrl+Shift+U")));
+    connect(m_qslUploadAction, &QAction::triggered, this, &MainWindow::onQslUpload);
 
-    qslMenu->addAction(qslDownloadAction);
-    qslMenu->addAction(qslUploadAction);
+    qslMenu->addAction(m_qslDownloadAction);
+    qslMenu->addAction(m_qslUploadAction);
+
+    // --- Tools ---
+    QMenu *toolsMenu = menuBar()->addMenu(tr("&Tools"));
+
+    m_migrateDatabaseAction = new QAction(tr("&Migrate Database…"), this);
+    connect(m_migrateDatabaseAction, &QAction::triggered,
+            this, &MainWindow::onMigrateDatabase);
+    toolsMenu->addAction(m_migrateDatabaseAction);
 
     // --- Help ---
     QMenu *helpMenu = menuBar()->addMenu(tr("&Help"));
@@ -450,8 +460,8 @@ void MainWindow::openDefaultDatabase()
         config = {
             {"host",     cfg.dbMariadbHost()},
             {"port",     cfg.dbMariadbPort()},
-            {"name",     cfg.dbMariadbDatabase()},
-            {"user",     cfg.dbMariadbUsername()},
+            {"database", cfg.dbMariadbDatabase()},
+            {"username", cfg.dbMariadbUsername()},
             {"password", cfg.dbMariadbPassword()},
         };
         backend = std::make_unique<MariaDbBackend>();
@@ -500,6 +510,58 @@ void MainWindow::updateQsoCount()
         m_qsoCountLabel->setText(tr("QSOs: %1 of %2").arg(m_logModel->rowCount()).arg(total));
     else
         m_qsoCountLabel->setText(tr("QSOs: %1").arg(total));
+}
+
+void MainWindow::setMigrationLock(bool locked)
+{
+    m_migrationLock = locked;
+    m_entryPanel->setEnabled(!locked);
+    m_newQsoAction->setEnabled(!locked);
+    m_newLogAction->setEnabled(!locked &&
+        Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_qslDownloadAction->setEnabled(!locked);
+    m_qslUploadAction->setEnabled(!locked);
+    m_migrateDatabaseAction->setEnabled(!locked);
+
+    for (DigitalListenerService *svc : m_digitalListeners) {
+        if (locked  && svc->isRunning())  svc->stop();
+        if (!locked && svc->isEnabled())  svc->start();
+    }
+}
+
+void MainWindow::onMigrateDatabase()
+{
+    if (!m_db) return;
+
+    setMigrationLock(true);
+
+    MigrateDatabaseDialog dlg(m_db.get(), this);
+    dlg.exec();
+
+    if (dlg.shouldSwitchBackend()) {
+        Settings &s = Settings::instance();
+        const QVariantMap cfg = dlg.targetConfig();
+
+        if (dlg.targetBackendKey() == QLatin1String("sqlite")) {
+            s.setDbBackend(QStringLiteral("sqlite"));
+            s.setDbSqlitePath(cfg.value("path").toString());
+        } else {
+            s.setDbBackend(QStringLiteral("mariadb"));
+            s.setDbMariadbHost    (cfg.value("host").toString());
+            s.setDbMariadbPort    (cfg.value("port").toInt());
+            s.setDbMariadbDatabase(cfg.value("database").toString());
+            s.setDbMariadbUsername(cfg.value("username").toString());
+            s.setDbMariadbPassword(cfg.value("password").toString());
+        }
+
+        m_db.reset();
+        openDefaultDatabase();
+
+        const bool isMariadb = (s.dbBackend() == QLatin1String("mariadb"));
+        m_newLogAction->setEnabled(!isMariadb);
+    }
+
+    setMigrationLock(false);
 }
 
 // ---------------------------------------------------------------------------
@@ -808,7 +870,8 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
 
 void MainWindow::wireCallsignLookup()
 {
-    m_lookupProvider      = new QrzXmlLookupProvider(this);
+    m_ctyProvider         = new CtyDatLookupProvider(this);
+    m_qrzProvider         = new QrzXmlLookupProvider(this);
     m_callsignLookupTimer = new QTimer(this);
     m_callsignLookupTimer->setSingleShot(true);
     m_callsignLookupTimer->setInterval(600);
@@ -829,6 +892,11 @@ void MainWindow::wireCallsignLookup()
             return;
         }
         m_cachedLookupResult = {};   // stale for new callsign until result arrives
+
+        // CTY.dat: synchronous — fires and applies before the debounce timer starts
+        if (m_ctyProvider->isAvailable())
+            m_ctyProvider->lookup(callsign);
+
         m_callsignLookupTimer->start();
     });
 
@@ -838,10 +906,10 @@ void MainWindow::wireCallsignLookup()
 
         const Callsign cs(typed);
 
-        // Network lookup — use base callsign so "VE3/W1AW/P" looks up W1AW
-        if (m_lookupProvider->isAvailable()) {
+        // QRZ: use base callsign so "VE3/W1AW/P" looks up W1AW on QRZ
+        if (m_qrzProvider->isAvailable()) {
             m_entryPanel->setLookupStatus(tr("Looking up %1…").arg(cs.base()));
-            m_lookupProvider->lookup(cs.base());
+            m_qrzProvider->lookup(cs.base());
         }
 
         // Previous QSOs — exact match on typed callsign, real total count
@@ -860,18 +928,27 @@ void MainWindow::wireCallsignLookup()
         }
     });
 
-    connect(m_lookupProvider, &CallsignLookupProvider::resultReady,
+    // CTY.dat result: apply immediately (synchronous, fires inline from lookup())
+    connect(m_ctyProvider, &CallsignLookupProvider::resultReady,
             this, [this](const QString &callsign, const CallsignLookupResult &result) {
         if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
-        m_cachedLookupResult = result;   // keep a copy that survives clearForm()
+        m_cachedLookupResult = result;
         m_entryPanel->setLookupResult(result);
     });
 
-    connect(m_lookupProvider, &CallsignLookupProvider::lookupFailed,
+    // QRZ result: merge on top of CTY result following field-precedence rules
+    connect(m_qrzProvider, &CallsignLookupProvider::resultReady,
+            this, [this](const QString &callsign, const CallsignLookupResult &result) {
+        if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
+        m_cachedLookupResult = mergeQrzIntoCty(m_cachedLookupResult, result);
+        m_entryPanel->setLookupResult(m_cachedLookupResult);
+    });
+
+    connect(m_qrzProvider, &CallsignLookupProvider::lookupFailed,
             this, [this](const QString &callsign, const QString &error) {
         if (callsign.compare(m_pendingLookupCallsign, Qt::CaseInsensitive) != 0) return;
-        m_cachedLookupResult = {};
-        m_entryPanel->setLookupStatus(tr("Lookup failed: %1").arg(error));
+        // Only clear status; CTY.dat result (if any) remains in cache and on panel
+        m_entryPanel->setLookupStatus(tr("QRZ lookup failed: %1").arg(error));
     });
 }
 
@@ -895,6 +972,41 @@ void MainWindow::applyLookupResult(Qso &qso, const CallsignLookupResult &r)
     mi(qso.ituZone,    r.ituZone);
     if (!qso.lat.has_value() && r.lat.has_value()) qso.lat = r.lat;
     if (!qso.lon.has_value() && r.lon.has_value()) qso.lon = r.lon;
+}
+
+CallsignLookupResult MainWindow::mergeQrzIntoCty(const CallsignLookupResult &base,
+                                                  const CallsignLookupResult &qrz)
+{
+    CallsignLookupResult m = base;
+
+    // QRZ provides personal data that CTY.dat cannot — always take QRZ values
+    auto os = [](QString &f, const QString &v) { if (!v.isEmpty()) f = v; };
+    os(m.name,         qrz.name);
+    os(m.firstName,    qrz.firstName);
+    os(m.lastName,     qrz.lastName);
+    os(m.qth,          qrz.qth);
+    os(m.state,        qrz.state);
+    os(m.county,       qrz.county);
+    os(m.licenseClass, qrz.licenseClass);
+    os(m.email,        qrz.email);
+    os(m.url,          qrz.url);
+    os(m.imageUrl,     qrz.imageUrl);
+
+    // QRZ overrides: operator's precise registered location beats CTY country centroid
+    if (qrz.lat.has_value())       m.lat        = qrz.lat;
+    if (qrz.lon.has_value())       m.lon        = qrz.lon;
+    if (!qrz.gridsquare.isEmpty()) m.gridsquare = qrz.gridsquare;
+
+    // CTY.dat is authoritative for zone/entity/country; only fill if CTY left them empty
+    if (m.country.isEmpty()  && !qrz.country.isEmpty()) m.country  = qrz.country;
+    if (m.cont.isEmpty()     && !qrz.cont.isEmpty())    m.cont     = qrz.cont;
+    if (m.dxcc    == 0       && qrz.dxcc    > 0)        m.dxcc     = qrz.dxcc;
+    if (m.cqZone  == 0       && qrz.cqZone  > 0)        m.cqZone   = qrz.cqZone;
+    if (m.ituZone == 0       && qrz.ituZone > 0)        m.ituZone  = qrz.ituZone;
+
+    if (!qrz.callsign.isEmpty()) m.callsign = qrz.callsign;
+
+    return m;
 }
 
 // ---------------------------------------------------------------------------
@@ -951,7 +1063,7 @@ void MainWindow::applyDownloadedConfirmations(const QList<Qso> &matched,
 
 void MainWindow::onQsoReady(const Qso &qso)
 {
-    if (!m_db) return;
+    if (!m_db || m_migrationLock) return;
 
     Qso inserted = qso;
     enrichQso(inserted);

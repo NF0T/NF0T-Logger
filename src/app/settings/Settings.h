@@ -243,7 +243,7 @@ public:
     void        setWsjtxMulticastIfaces(const QStringList &v);
 
     // -----------------------------------------------------------------------
-    // Callsign lookup
+    // Callsign lookup — QRZ XML
     // -----------------------------------------------------------------------
     bool    callsignLookupEnabled() const;
     void    setCallsignLookupEnabled(bool v);
@@ -254,6 +254,15 @@ public:
     // Secure — stored in system keychain
     QString qrzXmlPassword() const;
     void    setQrzXmlPassword(const QString &v);
+
+    // -----------------------------------------------------------------------
+    // Callsign lookup — CTY.dat offline DXCC
+    // -----------------------------------------------------------------------
+    bool    ctyDatEnabled()    const;
+    void    setCtyDatEnabled(bool v);
+
+    QString ctyDatCustomPath() const;   // empty = use default resolution order
+    void    setCtyDatCustomPath(const QString &v);
 
     // -----------------------------------------------------------------------
     // UI state (window geometry etc.)
