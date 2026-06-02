@@ -22,7 +22,7 @@ jobs:
       - name: Extract CalVer from CMakeLists.txt
         id: calver
         run: |
-          VERSION=$(grep -m1 'VERSION [0-9]' CMakeLists.txt | grep -oP '\d+\.\d+\.\d+(\.\d+)?')
+          VERSION=$(grep -m1 '^\s*VERSION [0-9]' CMakeLists.txt | grep -oP '\d+\.\d+\.\d+(\.\d+)?')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - uses: release-drafter/release-drafter@v7.2.0
