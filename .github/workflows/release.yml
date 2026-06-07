@@ -71,7 +71,7 @@ jobs:
       - name: Install build dependencies
         run: |
           apt-get install -y --no-install-recommends \
-            g++ cmake ninja-build pkg-config \
+            g++ cmake ninja-build pkg-config file \
             qt6-base-dev libqt6websockets6-dev qt6-tools-dev-tools \
             qtkeychain-qt6-dev libsecret-1-dev libhamlib-dev
 
@@ -92,10 +92,11 @@ jobs:
 
       - name: Build AppImage
         env:
-          VERSION: ${{ github.ref_name }}
+          LINUXDEPLOY_OUTPUT_VERSION: ${{ github.ref_name }}
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
-          VERSION=${VERSION#v}
+          LINUXDEPLOY_OUTPUT_VERSION=${LINUXDEPLOY_OUTPUT_VERSION#v}
+          export LINUXDEPLOY_OUTPUT_VERSION
           export QMAKE=$(which qmake6 2>/dev/null || find /usr -name qmake6 2>/dev/null | head -1)
           echo "Using qmake6: $QMAKE"
           ./linuxdeploy-x86_64.AppImage \
@@ -104,7 +105,7 @@ jobs:
             --plugin qt \
             --output appimage
           find . -maxdepth 1 -name "NF0T*Logger*.AppImage" | head -1 \
-            | xargs -I{} mv {} NF0T-Logger-${VERSION}-x86_64.AppImage
+            | xargs -I{} mv {} NF0T-Logger-${LINUXDEPLOY_OUTPUT_VERSION}-x86_64.AppImage
 
       - uses: actions/upload-artifact@v7.0.1
         with:
