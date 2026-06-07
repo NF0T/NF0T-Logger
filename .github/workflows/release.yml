@@ -54,23 +54,26 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Linux — Ubuntu 22.04 AppImage
+  # Linux — Debian Trixie (Qt 6.8, same environment as CI)
   # ---------------------------------------------------------------------------
   package-linux:
     name: Linux AppImage
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
 
     steps:
+      - name: Install git and ca-certificates
+        run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git wget
+
       - uses: actions/checkout@v6.0.2
 
       - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          apt-get install -y --no-install-recommends \
             g++ cmake ninja-build pkg-config \
             qt6-base-dev libqt6websockets6-dev qt6-tools-dev-tools \
-            qtkeychain-qt6-dev libsecret-1-dev libhamlib-dev \
-            libgl1-mesa-dev libxkbcommon-dev
+            qtkeychain-qt6-dev libsecret-1-dev libhamlib-dev
 
       - name: Configure
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
