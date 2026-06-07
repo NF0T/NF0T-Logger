@@ -131,9 +131,39 @@ if(HAMLIB_FOUND)
     target_link_libraries(NF0T-Logger PRIVATE ${HAMLIB_LINK_LIBRARIES})
 endif()
 
+if(WIN32)
+    target_sources(NF0T-Logger PRIVATE
+        "${CMAKE_SOURCE_DIR}/packaging/windows/nf0t-logger.rc"
+    )
+endif()
+
 # Install rules
 include(GNUInstallDirs)
 install(TARGETS NF0T-Logger
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/nf0t-logger.desktop"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+    install(FILES "${CMAKE_SOURCE_DIR}/packaging/linux/nf0t-logger.png"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps")
+endif()
+
+if(WIN32)
+    install(CODE "
+        find_program(_WDQT windeployqt6 REQUIRED)
+        execute_process(
+            COMMAND \"\${_WDQT}\"
+                --no-translations
+                --no-system-d3d-compiler
+                --no-compiler-runtime
+                \"\${CMAKE_INSTALL_PREFIX}/bin/NF0T-Logger.exe\"
+            RESULT_VARIABLE _R
+        )
+        if(NOT _R EQUAL 0)
+            message(FATAL_ERROR \"windeployqt6 failed: \${_R}\")
+        endif()
+    ")
+endif()

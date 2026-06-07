@@ -72,7 +72,7 @@ Existing tags (`v0.1.0` through `v0.4.0`) remain unchanged in git history. The s
 
 ---
 
-## v26.XX.N — Release Packaging and Distribution
+## v26.XX.N — Release Packaging and Distribution ✓ shipped
 
 Produce signed, self-contained installer/image artifacts and attach them to every GitHub release.
 
