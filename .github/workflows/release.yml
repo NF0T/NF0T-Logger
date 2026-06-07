@@ -58,7 +58,7 @@ jobs:
   # ---------------------------------------------------------------------------
   package-linux:
     name: Linux AppImage
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -70,7 +70,7 @@ jobs:
             g++ cmake ninja-build pkg-config \
             qt6-base-dev libqt6websockets6-dev qt6-tools-dev-tools \
             qtkeychain-qt6-dev libsecret-1-dev libhamlib-dev \
-            libgl1-mesa-dev libfuse2
+            libgl1-mesa-dev libxkbcommon-dev
 
       - name: Configure
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -93,7 +93,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
           VERSION=${VERSION#v}
-          QMAKE=$(which qmake6 2>/dev/null || find /usr -name qmake6 2>/dev/null | head -1)
+          export QMAKE=$(which qmake6 2>/dev/null || find /usr -name qmake6 2>/dev/null | head -1)
           echo "Using qmake6: $QMAKE"
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
