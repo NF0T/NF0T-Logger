@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Windows — MSYS2 MinGW64 NSIS installer
+  # ---------------------------------------------------------------------------
+  package-windows:
+    name: Windows NSIS Installer
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          pacboy: >-
+            gcc:p
+            cmake:p
+            ninja:p
+            pkgconf:p
+            qt6-base:p
+            qt6-websockets:p
+            qt6-tools:p
+            qtkeychain-qt6:p
+            nsis:p
+
+      - name: Configure
+        shell: msys2 {0}
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        shell: msys2 {0}
+        run: cmake --build build --parallel
+
+      - name: Package (NSIS)
+        shell: msys2 {0}
+        run: cd build && cpack -G NSIS
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: windows-installer
+          path: build/NF0T-Logger-*-win64.exe
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Linux — Ubuntu 22.04 AppImage
+  # ---------------------------------------------------------------------------
+  package-linux:
+    name: Linux AppImage
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            g++ cmake ninja-build pkg-config \
+            qt6-base-dev libqt6websockets6-dev qt6-tools-dev qt6-tools-dev-tools \
+            qtkeychain-qt6-dev libsecret-1-dev libhamlib-dev \
+            libfuse2
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Install into AppDir
+        run: cmake --install build --prefix AppDir/usr
+
+      - name: Download linuxdeploy + Qt plugin
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+      - name: Build AppImage
+        env:
+          VERSION: ${{ github.ref_name }}
+          QMAKE: /usr/lib/x86_64-linux-gnu/qt6/bin/qmake6
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: |
+          VERSION=${VERSION#v}
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --executable AppDir/usr/bin/NF0T-Logger \
+            --plugin qt \
+            --output appimage
+          find . -maxdepth 1 -name "NF0T*Logger*.AppImage" | head -1 \
+            | xargs -I{} mv {} NF0T-Logger-${VERSION}-x86_64.AppImage
+
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: linux-appimage
+          path: NF0T-Logger-*-x86_64.AppImage
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Sign both artifacts and attach to GitHub release
+  # ---------------------------------------------------------------------------
+  sign-and-upload:
+    name: Sign and Upload to Release
+    needs: [package-windows, package-linux]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Import GPG signing key
+        run: echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+
+      - name: Sign artifacts
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          for f in NF0T-Logger-*.exe NF0T-Logger-*.AppImage; do
+            [ -f "$f" ] || continue
+            gpg --batch --yes \
+              --passphrase-fd 0 \
+              --pinentry-mode loopback \
+              --detach-sign --armor "$f" \
+              <<< "$GPG_PASSPHRASE"
+          done
+
+      - name: Create or upload to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create the release if it doesn't already exist (release-drafter may have pre-created it)
+          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" \
+            --json tagName 2>/dev/null \
+            || gh release create "${{ github.ref_name }}" \
+                 --repo "${{ github.repository }}" \
+                 --draft \
+                 --title "${{ github.ref_name }}" \
+                 --generate-notes
+          gh release upload "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --clobber \
+            NF0T-Logger-*.exe \
+            NF0T-Logger-*.exe.asc \
+            NF0T-Logger-*.AppImage \
+            NF0T-Logger-*.AppImage.asc

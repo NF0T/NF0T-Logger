@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=NF0T Logger
+GenericName=Amateur Radio Logger
+Comment=Amateur radio contact (QSO) logger
+Exec=NF0T-Logger
+Icon=nf0t-logger
+Categories=HamRadio;
+Keywords=ham;radio;amateur;qso;logging;adif;lotw;
+StartupNotify=true
