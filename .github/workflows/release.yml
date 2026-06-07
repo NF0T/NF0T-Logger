@@ -70,7 +70,7 @@ jobs:
             g++ cmake ninja-build pkg-config \
             qt6-base-dev libqt6websockets6-dev qt6-tools-dev qt6-tools-dev-tools \
             qtkeychain-qt6-dev libsecret-1-dev libhamlib-dev \
-            libfuse2
+            libgl1-mesa-dev libfuse2
 
       - name: Configure
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
