@@ -3,9 +3,11 @@
 #pragma once
 
 #include <memory>
+#include <QFutureWatcher>
 #include <QList>
 #include <QMainWindow>
 #include <QStringList>
+#include <QVariantMap>
 
 #include "core/logbook/Qso.h"
 #include "lookup/CallsignLookupResult.h"
@@ -14,6 +16,15 @@ class QAction;
 class QLabel;
 class QTableView;
 class QTimer;
+
+/// Outcome of a background ADIF import (see MainWindow::onImportAdif()).
+struct AdifImportResult {
+    int imported   = 0;
+    int duplicates = 0;
+    int errors     = 0;
+    int skipped    = 0;
+    QStringList errorDetails;
+};
 
 class MigrateDatabaseDialog;
 class QsoFullEntryDialog;
@@ -79,6 +90,12 @@ private:
     void reloadLog();
     void updateQsoCount();
 
+    // Builds the config map for the currently-configured backend (Settings),
+    // and reports which backend key ("sqlite" | "mariadb") it belongs to.
+    // Shared by openDefaultDatabase() and the background ADIF import, which
+    // opens its own second connection to the same database.
+    QVariantMap currentBackendConfig(QString &keyOut) const;
+
     // Wire a radio backend's signals to the entry panel and status bar.
     // Call once per backend after construction.
     void wireRadioBackend(RadioBackend *backend);
@@ -108,6 +125,10 @@ private:
     // Database + model
     std::unique_ptr<DatabaseInterface> m_db;
     QsoTableModel *m_logModel = nullptr;
+
+    // Background ADIF import (see onImportAdif()). Non-null while an import
+    // is in flight; closeEvent() refuses to close the window until it clears.
+    QFutureWatcher<AdifImportResult> *m_adifImportWatcher = nullptr;
 
     // Radio backends — typed members for menu-action slots; generic list for
     // shared wiring and disconnect-all.

@@ -22,9 +22,11 @@
 #include <QKeySequence>
 #include <QMenu>
 #include <QProgressDialog>
+#include <QPromise>
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QTimer>
+#include <QtConcurrentRun>
 
 #include "app/settings/SecureSettings.h"
 #include "app/settings/Settings.h"
@@ -156,6 +158,13 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    if (m_adifImportWatcher) {
+        QMessageBox::information(this, tr("Import in Progress"),
+            tr("An ADIF import is still running. Cancel it before closing NF0T-Logger."));
+        event->ignore();
+        return;
+    }
+
     // Disconnect and shut down radio backends before Qt's child destruction
     // order can deliver signals to already-destroyed status bar widgets.
     for (RadioBackend *b : m_radioBackends) {
@@ -448,30 +457,37 @@ void MainWindow::setupStatusBar()
 // Database
 // ---------------------------------------------------------------------------
 
-void MainWindow::openDefaultDatabase()
+QVariantMap MainWindow::currentBackendConfig(QString &keyOut) const
 {
     const Settings &cfg = Settings::instance();
-    const QString backendKey = cfg.dbBackend();   // "sqlite" | "mariadb"
+    keyOut = cfg.dbBackend();   // "sqlite" | "mariadb"
 
-    std::unique_ptr<DatabaseInterface> backend;
-    QVariantMap config;
-
-    if (backendKey == QLatin1String("mariadb")) {
-        config = {
+    if (keyOut == QLatin1String("mariadb")) {
+        return {
             {"host",     cfg.dbMariadbHost()},
             {"port",     cfg.dbMariadbPort()},
             {"database", cfg.dbMariadbDatabase()},
             {"username", cfg.dbMariadbUsername()},
             {"password", cfg.dbMariadbPassword()},
         };
-        backend = std::make_unique<MariaDbBackend>();
-    } else {
-        const QString dataDir =
-            QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-        QDir().mkpath(dataDir);
-        config  = {{"path", dataDir + "/log.db"}};
-        backend = std::make_unique<SqliteBackend>();
     }
+
+    const QString dataDir =
+        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    QDir().mkpath(dataDir);
+    return {{"path", dataDir + "/log.db"}};
+}
+
+void MainWindow::openDefaultDatabase()
+{
+    QString backendKey;
+    const QVariantMap config = currentBackendConfig(backendKey);
+
+    std::unique_ptr<DatabaseInterface> backend;
+    if (backendKey == QLatin1String("mariadb"))
+        backend = std::make_unique<MariaDbBackend>();
+    else
+        backend = std::make_unique<SqliteBackend>();
 
     if (auto r = backend->open(config); !r) {
         QMessageBox::critical(this, tr("Database Error"),
@@ -487,7 +503,7 @@ void MainWindow::openDefaultDatabase()
 
     m_db = std::move(backend);
     const QString label = backendKey == QLatin1String("mariadb")
-        ? tr("MariaDB (%1)").arg(cfg.dbMariadbHost())
+        ? tr("MariaDB (%1)").arg(config["host"].toString())
         : config["path"].toString();
     showStatusMessage(tr("Database opened: %1").arg(label), 4000);
     reloadLog();
@@ -514,6 +530,9 @@ void MainWindow::updateQsoCount()
 
 void MainWindow::setMigrationLock(bool locked)
 {
+    // Shared by the DB migration tool and the background ADIF import: both
+    // are exclusive operations against m_db, so each locks out the other in
+    // addition to the usual entry/QSL/digital-listener writers.
     m_migrationLock = locked;
     m_entryPanel->setEnabled(!locked);
     m_newQsoAction->setEnabled(!locked);
@@ -522,6 +541,7 @@ void MainWindow::setMigrationLock(bool locked)
     m_qslDownloadAction->setEnabled(!locked);
     m_qslUploadAction->setEnabled(!locked);
     m_migrateDatabaseAction->setEnabled(!locked);
+    m_importAdifAction->setEnabled(!locked);
 
     for (DigitalListenerService *svc : m_digitalListeners) {
         if (locked  && svc->isRunning())  svc->stop();
@@ -626,64 +646,132 @@ static void enrichQso(Qso &qso)
     }
 }
 
+namespace {
+
+// Opens a fresh, short-lived connection to the given backend — used by the
+// ADIF import worker thread, which cannot share MainWindow's own m_db
+// connection (Qt SQL connections may only be used by the thread that opened
+// them). The schema already exists on this database, so unlike
+// MigrateDatabaseDialog's target connection, this one skips initSchema().
+std::unique_ptr<DatabaseInterface> openBackendForImport(const QString &backendKey,
+                                                         const QVariantMap &config,
+                                                         QString &errorOut)
+{
+    std::unique_ptr<DatabaseInterface> backend;
+    if (backendKey == QLatin1String("mariadb"))
+        backend = std::make_unique<MariaDbBackend>();
+    else
+        backend = std::make_unique<SqliteBackend>();
+
+    if (auto r = backend->open(config); !r) {
+        errorOut = r.error();
+        return nullptr;
+    }
+    return backend;
+}
+
+// Runs on a QtConcurrent worker thread. Parses the file and inserts each QSO
+// through its own DB connection; progress and cooperative cancellation go
+// through QPromise, which QFutureWatcher marshals back to the UI thread.
+void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
+                    const QString &backendKey, const QVariantMap &dbConfig)
+{
+    AdifImportResult result;
+
+    QString openError;
+    std::unique_ptr<DatabaseInterface> db = openBackendForImport(backendKey, dbConfig, openError);
+    if (!db) {
+        result.errorDetails << QObject::tr("Could not open database for import: %1").arg(openError);
+        promise.addResult(result);
+        return;
+    }
+
+    const AdifParser::Result parsed = AdifParser::parseFile(path);
+    result.skipped = parsed.skipped;
+    result.errorDetails = parsed.warnings;
+
+    promise.setProgressRange(0, parsed.qsos.size());
+    for (int i = 0; i < parsed.qsos.size(); ++i) {
+        if (promise.isCanceled()) break;
+
+        Qso qso = parsed.qsos.at(i);
+        enrichQso(qso);
+        if (auto r = db->insertQso(qso); !r) {
+            const QString &err = r.error();
+            // Unique constraint violations are expected for duplicates
+            if (err.contains("UNIQUE", Qt::CaseInsensitive) ||
+                err.contains("Duplicate", Qt::CaseInsensitive)) {
+                ++result.duplicates;
+            } else {
+                ++result.errors;
+                result.errorDetails << QStringLiteral("Insert failed for %1: %2").arg(qso.callsign, err);
+            }
+        } else {
+            ++result.imported;
+        }
+        promise.setProgressValue(i + 1);
+    }
+
+    promise.addResult(result);
+}
+
+} // namespace
+
 void MainWindow::onImportAdif()
 {
-    if (!m_db) return;
+    if (!m_db || m_migrationLock || m_adifImportWatcher) return;
 
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Import ADIF"), QString(),
         tr("ADIF Files (*.adi *.adif);;All Files (*)"));
     if (path.isEmpty()) return;
 
-    QProgressDialog progress(tr("Parsing ADIF file…"), tr("Cancel"), 0, 0, this);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(300);
-    progress.setValue(0);
-    qApp->processEvents();
+    QString backendKey;
+    const QVariantMap dbConfig = currentBackendConfig(backendKey);
 
-    const AdifParser::Result parsed = AdifParser::parseFile(path);
+    auto *progress = new QProgressDialog(tr("Parsing ADIF file…"), tr("Cancel"), 0, 0, this);
+    progress->setWindowModality(Qt::WindowModal);
+    progress->setMinimumDuration(300);
+    progress->setAttribute(Qt::WA_DeleteOnClose);
 
-    int imported = 0, duplicates = 0, errors = 0;
-    QStringList errorDetails = parsed.warnings;
+    setMigrationLock(true);
 
-    progress.setMaximum(parsed.qsos.size());
-    for (int i = 0; i < parsed.qsos.size(); ++i) {
-        if (progress.wasCanceled()) break;
-        progress.setValue(i);
+    m_adifImportWatcher = new QFutureWatcher<AdifImportResult>(this);
 
-        Qso qso = parsed.qsos.at(i);
-        enrichQso(qso);
-        if (auto r = m_db->insertQso(qso); !r) {
-            const QString &err = r.error();
-            // Unique constraint violations are expected for duplicates
-            if (err.contains("UNIQUE", Qt::CaseInsensitive) ||
-                err.contains("Duplicate", Qt::CaseInsensitive)) {
-                ++duplicates;
-            } else {
-                ++errors;
-                errorDetails << QString("Insert failed for %1: %2").arg(qso.callsign, err);
-            }
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::progressRangeChanged,
+            progress, &QProgressDialog::setRange);
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::progressValueChanged,
+            progress, &QProgressDialog::setValue);
+    connect(progress, &QProgressDialog::canceled,
+            m_adifImportWatcher, &QFutureWatcherBase::cancel);
+
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::finished, this, [this, progress]() {
+        const AdifImportResult result = m_adifImportWatcher->result();
+
+        progress->close();
+        setMigrationLock(false);
+        m_adifImportWatcher->deleteLater();
+        m_adifImportWatcher = nullptr;
+
+        reloadLog();
+
+        const QString summary = tr("Import complete.\n\nImported: %1\nDuplicates skipped: %2\n"
+                                   "Parse errors: %3\nDB errors: %4")
+                                      .arg(result.imported).arg(result.duplicates)
+                                      .arg(result.skipped).arg(result.errors);
+
+        if (result.errorDetails.isEmpty()) {
+            QMessageBox::information(this, tr("ADIF Import"), summary);
         } else {
-            ++imported;
+            QMessageBox *box = new QMessageBox(QMessageBox::Warning, tr("ADIF Import"),
+                                               summary, QMessageBox::Ok, this);
+            box->setDetailedText(result.errorDetails.join('\n'));
+            box->exec();
         }
-    }
-    progress.setValue(parsed.qsos.size());
+    });
 
-    reloadLog();
-
-    QString summary = tr("Import complete.\n\nImported: %1\nDuplicates skipped: %2\n"
-                         "Parse errors: %3\nDB errors: %4")
-                          .arg(imported).arg(duplicates)
-                          .arg(parsed.skipped).arg(errors);
-
-    if (errorDetails.isEmpty()) {
-        QMessageBox::information(this, tr("ADIF Import"), summary);
-    } else {
-        QMessageBox *box = new QMessageBox(QMessageBox::Warning, tr("ADIF Import"),
-                                           summary, QMessageBox::Ok, this);
-        box->setDetailedText(errorDetails.join('\n'));
-        box->exec();
-    }
+    m_adifImportWatcher->setFuture(
+        QtConcurrent::run(&runAdifImport, path, backendKey, dbConfig));
 }
 
 void MainWindow::onExportAdif()

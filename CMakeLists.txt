@@ -14,7 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Sql WebSockets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Sql WebSockets Concurrent)
 qt_standard_project_setup()
 
 # Place all executables in <build>/bin so artifact paths are predictable
