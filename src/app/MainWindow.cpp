@@ -931,6 +931,12 @@ void MainWindow::onConnectHamlib()
             tr("Hamlib is not enabled. Enable it in Settings \u2192 Radio."));
         return;
     }
+    // Disable eagerly rather than waiting for connected(): connectRadio() is
+    // dispatched asynchronously now, so without this a second click (or a
+    // click on the other backend's Connect action) queued before the first
+    // attempt resolves could reach the backend while it's mid-connect.
+    for (QAction *act : m_radioConnectActions)
+        act->setEnabled(false);
     QMetaObject::invokeMethod(m_hamlibBackend, &RadioBackend::connectRadio, Qt::QueuedConnection);
 }
 
@@ -941,6 +947,8 @@ void MainWindow::onConnectTci()
             tr("TCI is not enabled. Enable it in Settings \u2192 Radio."));
         return;
     }
+    for (QAction *act : m_radioConnectActions)
+        act->setEnabled(false);
     QMetaObject::invokeMethod(m_tciBackend, &RadioBackend::connectRadio, Qt::QueuedConnection);
 }
 
@@ -997,6 +1005,13 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
 
     connect(backend, &RadioBackend::error, this, [this, backend, indicator](const QString &msg) {
         setIndicatorState(indicator, IndicatorState::Fault);
+        // A failed connect attempt (rig_init/rig_open failure, etc.) never
+        // reaches connected(), so onConnectHamlib()/onConnectTci()'s eager
+        // disable would otherwise leave the Connect actions stuck disabled.
+        if (!anyRadioConnected()) {
+            for (QAction *act : m_radioConnectActions)
+                act->setEnabled(true);
+        }
         showStatusMessage(
             tr("%1 error: %2").arg(backend->displayName(), msg), 6000);
     });

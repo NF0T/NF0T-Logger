@@ -28,7 +28,7 @@ public:
     bool    isConnected()  const override;
 
 public slots:
-    bool connectRadio()       override;
+    void connectRadio()       override;
     void disconnectRadio()    override;
     void setFreq(double freqMhz) override;
     void setMode(const QString &adifMode, const QString &submode = {}) override;

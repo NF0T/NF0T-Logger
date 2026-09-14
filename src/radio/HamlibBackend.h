@@ -38,7 +38,7 @@ public:
     bool    isConnected()  const override;
 
 public slots:
-    bool connectRadio()       override;
+    void connectRadio()       override;
     void disconnectRadio()    override;
     void setFreq(double freqMhz) override;
     void setMode(const QString &adifMode, const QString &submode = {}) override;
@@ -50,17 +50,18 @@ private:
 #ifdef HAVE_HAMLIB
     bool configureSerial();
     bool configureNetwork();
-    void readFreq();
-    void readMode();
+    bool readFreq();
+    bool readMode();
 
     static QString rigModeToAdif(rmode_t mode, QString &submode);
     static rmode_t adifToRigMode(const QString &adifMode, const QString &submode);
 
-    void readPtt();
+    bool readPtt();
 
     RIG    *m_rig        = nullptr;
     rmode_t m_lastMode   = RIG_MODE_NONE;
     bool    m_lastPtt    = false;
+    int     m_consecutiveFailures = 0;
 #endif
 
     QTimer *m_pollTimer  = nullptr;

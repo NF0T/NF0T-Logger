@@ -22,14 +22,15 @@ public:
     virtual bool    isConnected()  const = 0;
 
 public slots:
-    /// Open the connection using current Settings values.
-    /// Returns true on success; on failure emits error() with details.
+    /// Open the connection using current Settings values. Always dispatched
+    /// asynchronously (see below), so success/failure is only observable via
+    /// the connected()/error() signals — there is no return value to check.
     ///
     /// A concrete backend may live on a worker thread (see HamlibBackend), so
     /// every slot here must be invoked via signal emission or
     /// QMetaObject::invokeMethod() — never a direct pointer call — once
     /// construction is complete.
-    virtual bool connectRadio() = 0;
+    virtual void connectRadio() = 0;
 
     /// Gracefully close the connection.
     virtual void disconnectRadio() = 0;
