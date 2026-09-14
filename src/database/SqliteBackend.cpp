@@ -23,6 +23,11 @@ std::expected<void, QString> SqliteBackend::open(const QVariantMap &config)
     execQuery("PRAGMA journal_mode=WAL");
     execQuery("PRAGMA foreign_keys=ON");
     execQuery("PRAGMA synchronous=NORMAL");
+    // A second connection (e.g. the ADIF import worker thread) may write to
+    // this same file concurrently with this one; without a busy timeout a
+    // lock collision fails immediately instead of waiting briefly for it to
+    // clear.
+    execQuery("PRAGMA busy_timeout=5000");
 
     return {};
 }
