@@ -83,6 +83,12 @@ public:
     QString dbSqlitePath() const;       // empty = use default location
     void    setDbSqlitePath(const QString &v);
 
+    // dbSqlitePath() if set, otherwise the default AppLocalDataLocation
+    // path. The single source of truth for "which SQLite file would we
+    // open right now" — use this instead of re-deriving the default
+    // wherever the resolved path is needed (MainWindow, MigrateDatabaseDialog).
+    QString resolvedSqlitePath() const;
+
     QString dbMariadbHost() const;
     void    setDbMariadbHost(const QString &v);
 

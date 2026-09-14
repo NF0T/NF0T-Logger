@@ -5,6 +5,7 @@
 
 #include <QDate>
 #include <QSettings>
+#include <QStandardPaths>
 
 // ---------------------------------------------------------------------------
 // Singleton + helpers
@@ -117,6 +118,14 @@ void Settings::setDbBackend(const QString &v)       { put("db/backend", v); }
 
 QString Settings::dbSqlitePath() const      { return get("db/sqlite/path", QString()); }
 void Settings::setDbSqlitePath(const QString &v)    { put("db/sqlite/path", v); }
+
+QString Settings::resolvedSqlitePath() const
+{
+    const QString custom = dbSqlitePath().trimmed();
+    if (!custom.isEmpty())
+        return custom;
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/log.db";
+}
 
 QString Settings::dbMariadbHost() const     { return get("db/mariadb/host", QStringLiteral("127.0.0.1")); }
 void Settings::setDbMariadbHost(const QString &v)   { put("db/mariadb/host", v); }
