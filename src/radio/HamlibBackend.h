@@ -2,6 +2,10 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #pragma once
 
+#include <atomic>
+
+#include <QThread>
+
 #include "RadioBackend.h"
 
 #ifdef HAVE_HAMLIB
@@ -17,20 +21,25 @@ class QTimer;
 ///
 /// When HAVE_HAMLIB is not defined the class still compiles; connectRadio()
 /// always returns false and emits an error() signal.
+///
+/// The whole object lives on its own QThread (m_thread) so a slow or hung
+/// Hamlib call never stalls the UI. It therefore cannot take a QObject
+/// parent — moveToThread() refuses to move a parented object — so it has no
+/// parent constructor parameter and MainWindow owns/deletes it explicitly.
 class HamlibBackend : public RadioBackend
 {
     Q_OBJECT
 
 public:
-    explicit HamlibBackend(QObject *parent = nullptr);
+    explicit HamlibBackend();
     ~HamlibBackend() override;
 
     QString displayName() const override { return QStringLiteral("Hamlib"); }
     bool    isConnected()  const override;
-    bool    connectRadio()       override;
-    void    disconnectRadio()    override;
 
 public slots:
+    bool connectRadio()       override;
+    void disconnectRadio()    override;
     void setFreq(double freqMhz) override;
     void setMode(const QString &adifMode, const QString &submode = {}) override;
 
@@ -55,6 +64,7 @@ private:
 #endif
 
     QTimer *m_pollTimer  = nullptr;
-    bool    m_connected  = false;
+    QThread m_thread;
+    std::atomic<bool> m_connected{false};
     double  m_lastFreqHz = 0.0;
 };

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #include "HamlibBackend.h"
 
+#include <QMetaObject>
 #include <QTimer>
 
 #include "app/settings/Settings.h"
@@ -10,17 +11,26 @@
 // Construction / destruction
 // ---------------------------------------------------------------------------
 
-HamlibBackend::HamlibBackend(QObject *parent)
-    : RadioBackend(parent)
+HamlibBackend::HamlibBackend()
+    : RadioBackend(nullptr)
 {
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(500);
     connect(m_pollTimer, &QTimer::timeout, this, &HamlibBackend::poll);
+
+    // m_pollTimer moves with us since it's parented to `this`.
+    moveToThread(&m_thread);
+    m_thread.start();
 }
 
 HamlibBackend::~HamlibBackend()
 {
-    disconnectRadio();
+    // Only MainWindow ever deletes this object, and only from the UI thread
+    // — never from inside m_thread itself, which would deadlock on wait().
+    QMetaObject::invokeMethod(this, &HamlibBackend::disconnectRadio,
+                               Qt::BlockingQueuedConnection);
+    m_thread.quit();
+    m_thread.wait();
 }
 
 // ---------------------------------------------------------------------------

@@ -26,10 +26,10 @@ public:
 
     QString displayName() const override { return QStringLiteral("TCI"); }
     bool    isConnected()  const override;
-    bool    connectRadio()       override;
-    void    disconnectRadio()    override;
 
 public slots:
+    bool connectRadio()       override;
+    void disconnectRadio()    override;
     void setFreq(double freqMhz) override;
     void setMode(const QString &adifMode, const QString &submode = {}) override;
 
