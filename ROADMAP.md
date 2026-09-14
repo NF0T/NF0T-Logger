@@ -197,9 +197,11 @@ The CTY.dat provider supersedes the built-in prefix table in the `Callsign` util
 
 ---
 
-## v26.9.1 — Off-UI-Thread I/O and Radio Backend Cleanup ✓ shipped
+## v26.9.2 — Off-UI-Thread I/O and Radio Backend Cleanup ✓ shipped
 
 Moves the two remaining sources of UI-thread blocking — ADIF import and Hamlib CAT I/O — onto background threads, and fixes a data-integrity gap in custom SQLite deployments.
+
+`v26.9.1` was tagged for this same content but never shipped a working release: it was published (creating the tag) before its build artifacts finished, which under GitHub's Immutable Releases feature permanently locked that release with zero binaries attached — and, it turns out, permanently burns the tag name itself even after the release object is deleted. `v26.9.1` does not exist as a usable release; `v26.9.2` is the real first artifact-bearing release of September 2026. See the CI fix below.
 
 ### ADIF import (#19)
 
@@ -212,6 +214,10 @@ Hamlib's blocking C API (`rig_open`, `rig_get_freq`, etc.) no longer runs on the
 ### Custom SQLite path and migration-lock UI coverage (#20, #23)
 
 A user-configured custom SQLite path was silently ignored in favor of the default app-data location. Also closes UI-coverage gaps during a database migration (log table, filter bar, export, and settings actions weren't disabled the same way an ADIF import already disabled them) and a split-brain hazard where a background ADIF import could target a different database than the one currently open if Settings changed mid-session.
+
+### Release pipeline fix (#27)
+
+`.github/workflows/release.yml` triggered on a tag push, but the only way to create a tag through the GitHub Release UI/API is to publish the release first — and GitHub's Immutable Releases feature permanently locks a release's assets and tag the instant it publishes, no exceptions. "Publish, then upload" was therefore the *only* sequence the old design made possible, and it's exactly the sequence Immutable Releases forbids. Retargeted the trigger to the version bump landing on `main` instead: a `detect-version` job diffs `CMakeLists.txt`'s CalVer against existing tags so an ordinary push to `main` is a no-op, and the build job now attaches assets to the still-draft release and publishes only as its own last action — no more manual "push a tag" or "publish the draft" step for a human to get out of order.
 
 ---
 
