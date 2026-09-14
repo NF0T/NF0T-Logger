@@ -485,6 +485,10 @@ QVariantMap MainWindow::currentBackendConfig(QString &keyOut) const
         };
     }
 
+    const QString customPath = cfg.dbSqlitePath();
+    if (!customPath.isEmpty())
+        return {{"path", customPath}};
+
     const QString dataDir =
         QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(dataDir);
@@ -547,11 +551,17 @@ void MainWindow::setMigrationLock(bool locked)
     // are paused too (an in-flight auto-log write must not race the switch).
     // Also locks out the ADIF import action — see setImportLock()'s comment
     // for why the two operations exclude each other but aren't merged.
+    // Mirrors setImportLock()'s UI coverage for everything else that reads
+    // or writes m_db (or the settings governing it) from the UI thread.
     m_migrationLock = locked;
     m_entryPanel->setEnabled(!locked);
     m_newQsoAction->setEnabled(!locked);
     m_newLogAction->setEnabled(!locked &&
         Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_logView->setEnabled(!locked);
+    m_filterBar->setEnabled(!locked);
+    m_exportAdifAction->setEnabled(!locked);
+    m_settingsAction->setEnabled(!locked);
     m_qslDownloadAction->setEnabled(!locked);
     m_qslUploadAction->setEnabled(!locked);
     m_migrateDatabaseAction->setEnabled(!locked);
