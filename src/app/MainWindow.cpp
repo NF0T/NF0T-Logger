@@ -21,6 +21,7 @@
 #include <QFileDialog>
 #include <QKeySequence>
 #include <QMenu>
+#include <QPointer>
 #include <QProgressDialog>
 #include <QPromise>
 #include <QShortcut>
@@ -229,7 +230,9 @@ void MainWindow::setupMenuBar()
 
     m_exitAction = new QAction(tr("E&xit"), this);
     m_exitAction->setShortcut(QKeySequence::Quit);
-    connect(m_exitAction, &QAction::triggered, qApp, &QApplication::quit);
+    // Routed through close() (not qApp->quit() directly) so closeEvent()'s
+    // in-progress-import guard always runs — quit() bypasses closeEvent().
+    connect(m_exitAction, &QAction::triggered, this, &MainWindow::close);
     fileMenu->addAction(m_exitAction);
 
     // --- Radio ---
@@ -530,9 +533,10 @@ void MainWindow::updateQsoCount()
 
 void MainWindow::setMigrationLock(bool locked)
 {
-    // Shared by the DB migration tool and the background ADIF import: both
-    // are exclusive operations against m_db, so each locks out the other in
-    // addition to the usual entry/QSL/digital-listener writers.
+    // m_db itself is being replaced during a migration, so digital listeners
+    // are paused too (an in-flight auto-log write must not race the switch).
+    // Also locks out the ADIF import action — see setImportLock()'s comment
+    // for why the two operations exclude each other but aren't merged.
     m_migrationLock = locked;
     m_entryPanel->setEnabled(!locked);
     m_newQsoAction->setEnabled(!locked);
@@ -549,9 +553,30 @@ void MainWindow::setMigrationLock(bool locked)
     }
 }
 
+void MainWindow::setImportLock(bool locked)
+{
+    // Unlike setMigrationLock(), the import worker never touches m_db — it
+    // opens its own connection — so digital listeners keep running and don't
+    // need pausing (pausing them would silently drop live FT8/FT4 contacts
+    // for no correctness reason). What does need locking out is anything
+    // else that reads or writes m_db on the UI thread while the worker is
+    // writing to the same file on its own connection.
+    m_importLock = locked;
+    m_entryPanel->setEnabled(!locked);
+    m_logView->setEnabled(!locked);
+    m_filterBar->setEnabled(!locked);
+    m_newLogAction->setEnabled(!locked &&
+        Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_exportAdifAction->setEnabled(!locked);
+    m_qslDownloadAction->setEnabled(!locked);
+    m_qslUploadAction->setEnabled(!locked);
+    m_migrateDatabaseAction->setEnabled(!locked);
+    m_settingsAction->setEnabled(!locked);
+}
+
 void MainWindow::onMigrateDatabase()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock) return;
 
     setMigrationLock(true);
 
@@ -617,7 +642,11 @@ void MainWindow::onNewLog()
 }
 
 // Derive missing lat/lon from gridsquare and compute distance from my station.
-static void enrichQso(Qso &qso)
+// Takes the station position explicitly so callers that run many QSOs in a
+// tight loop (the ADIF import worker) can read Settings once up front instead
+// of re-querying it per record.
+static void enrichQsoWithStation(Qso &qso, const QString &myGrid,
+                                  std::optional<double> myLat, std::optional<double> myLon)
 {
     // Derive DX lat/lon from grid square if not explicitly provided
     if (!qso.gridsquare.isEmpty() && !qso.lat.has_value()) {
@@ -634,16 +663,18 @@ static void enrichQso(Qso &qso)
     if (!qso.lat.has_value()) return;
 
     // Prefer my grid square for my position; fall back to stored lat/lon
-    const QString myGrid = Settings::instance().stationGridsquare();
     if (!myGrid.isEmpty()) {
         if (auto d = Maidenhead::distanceKm(myGrid, *qso.lat, *qso.lon))
             qso.distance = *d;
-    } else {
-        const auto mLat = Settings::instance().stationLat();
-        const auto mLon = Settings::instance().stationLon();
-        if (mLat.has_value() && mLon.has_value())
-            qso.distance = Maidenhead::distanceKm(*mLat, *mLon, *qso.lat, *qso.lon);
+    } else if (myLat.has_value() && myLon.has_value()) {
+        qso.distance = Maidenhead::distanceKm(*myLat, *myLon, *qso.lat, *qso.lon);
     }
+}
+
+static void enrichQso(Qso &qso)
+{
+    enrichQsoWithStation(qso, Settings::instance().stationGridsquare(),
+                         Settings::instance().stationLat(), Settings::instance().stationLon());
 }
 
 namespace {
@@ -670,17 +701,38 @@ std::unique_ptr<DatabaseInterface> openBackendForImport(const QString &backendKe
     return backend;
 }
 
+// How many inserts to batch per transaction. Bounds both how long the import
+// connection can hold a write lock at once (relevant to SqliteBackend's
+// PRAGMA busy_timeout, since the UI thread's own connection may be reading
+// concurrently) and how much work an autocommit-per-row loop would otherwise
+// force SQLite to fsync.
+constexpr int kImportBatchSize = 500;
+
+// Only post a progress update every this many records — QPromise's progress
+// signal is thread-marshaled to the UI on every call, so updating on every
+// single record is unnecessary UI-thread traffic for a large import.
+constexpr int kProgressUpdateStride = 25;
+
 // Runs on a QtConcurrent worker thread. Parses the file and inserts each QSO
-// through its own DB connection; progress and cooperative cancellation go
-// through QPromise, which QFutureWatcher marshals back to the UI thread.
+// through its own DB connection; progress goes through QPromise, which
+// QFutureWatcher marshals back to the UI thread.
+//
+// Cancellation note: once the associated QFuture is canceled (watcher->cancel()),
+// QPromise::addResult() silently discards whatever is passed to it — this is
+// Qt's own documented behavior (QFutureInterface::reportResult() refuses to
+// store a result once the Canceled state is set). So a canceled run never
+// reports a result at all; the caller must check QFutureWatcher::isCanceled()
+// before calling result(), not just check whether the call succeeded.
 void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
-                    const QString &backendKey, const QVariantMap &dbConfig)
+                    const QString &backendKey, const QVariantMap &dbConfig,
+                    const QString &myGrid, std::optional<double> myLat, std::optional<double> myLon)
 {
     AdifImportResult result;
 
     QString openError;
     std::unique_ptr<DatabaseInterface> db = openBackendForImport(backendKey, dbConfig, openError);
     if (!db) {
+        ++result.errors;
         result.errorDetails << QObject::tr("Could not open database for import: %1").arg(openError);
         promise.addResult(result);
         return;
@@ -691,11 +743,15 @@ void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
     result.errorDetails = parsed.warnings;
 
     promise.setProgressRange(0, parsed.qsos.size());
+
+    db->beginTransaction();
+    int sinceCommit = 0;
+
     for (int i = 0; i < parsed.qsos.size(); ++i) {
         if (promise.isCanceled()) break;
 
         Qso qso = parsed.qsos.at(i);
-        enrichQso(qso);
+        enrichQsoWithStation(qso, myGrid, myLat, myLon);
         if (auto r = db->insertQso(qso); !r) {
             const QString &err = r.error();
             // Unique constraint violations are expected for duplicates
@@ -709,9 +765,18 @@ void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
         } else {
             ++result.imported;
         }
-        promise.setProgressValue(i + 1);
+
+        if (++sinceCommit >= kImportBatchSize) {
+            db->commitTransaction();
+            db->beginTransaction();
+            sinceCommit = 0;
+        }
+
+        if (i % kProgressUpdateStride == 0 || i + 1 == parsed.qsos.size())
+            promise.setProgressValue(i + 1);
     }
 
+    db->commitTransaction();
     promise.addResult(result);
 }
 
@@ -719,7 +784,7 @@ void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
 
 void MainWindow::onImportAdif()
 {
-    if (!m_db || m_migrationLock || m_adifImportWatcher) return;
+    if (!m_db || m_migrationLock || m_importLock || m_adifImportWatcher) return;
 
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Import ADIF"), QString(),
@@ -729,12 +794,26 @@ void MainWindow::onImportAdif()
     QString backendKey;
     const QVariantMap dbConfig = currentBackendConfig(backendKey);
 
+    // Read the station position once, on the UI thread, instead of letting
+    // the worker re-query Settings (a fresh QSettings + disk/registry round
+    // trip) for every single QSO.
+    const QString myGrid = Settings::instance().stationGridsquare();
+    const auto myLat = Settings::instance().stationLat();
+    const auto myLon = Settings::instance().stationLon();
+
+    // No Qt::WA_DeleteOnClose: QProgressDialog auto-closes itself once its
+    // value reaches maximum() (and closing it by any means — Cancel, Escape,
+    // or the window's close button — all route through the same canceled()
+    // signal). If the dialog also deleted itself on that auto-close, the
+    // finished-handler lambda below would be left holding a dangling pointer
+    // whenever it ran afterward. Instead this code owns the dialog's lifetime
+    // explicitly via deleteLater() in that same handler.
     auto *progress = new QProgressDialog(tr("Parsing ADIF file…"), tr("Cancel"), 0, 0, this);
     progress->setWindowModality(Qt::WindowModal);
     progress->setMinimumDuration(300);
-    progress->setAttribute(Qt::WA_DeleteOnClose);
+    QPointer<QProgressDialog> progressGuard(progress);
 
-    setMigrationLock(true);
+    setImportLock(true);
 
     m_adifImportWatcher = new QFutureWatcher<AdifImportResult>(this);
 
@@ -745,15 +824,28 @@ void MainWindow::onImportAdif()
     connect(progress, &QProgressDialog::canceled,
             m_adifImportWatcher, &QFutureWatcherBase::cancel);
 
-    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::finished, this, [this, progress]() {
-        const AdifImportResult result = m_adifImportWatcher->result();
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::finished, this, [this, progressGuard]() {
+        // A canceled future never got a result reported to it — QPromise::addResult()
+        // silently discards results after cancellation (Qt's own behavior, not a bug
+        // in the worker). Calling result() in that case would fail on an empty result
+        // store, so it must never be called unless the run actually completed.
+        const bool wasCanceled = m_adifImportWatcher->isCanceled();
+        const AdifImportResult result = wasCanceled ? AdifImportResult{} : m_adifImportWatcher->result();
 
-        progress->close();
-        setMigrationLock(false);
+        if (progressGuard) {
+            progressGuard->close();
+            progressGuard->deleteLater();
+        }
+        setImportLock(false);
         m_adifImportWatcher->deleteLater();
         m_adifImportWatcher = nullptr;
 
         reloadLog();
+
+        if (wasCanceled) {
+            showStatusMessage(tr("ADIF import canceled. Records inserted before cancellation were kept."), 5000);
+            return;
+        }
 
         const QString summary = tr("Import complete.\n\nImported: %1\nDuplicates skipped: %2\n"
                                    "Parse errors: %3\nDB errors: %4")
@@ -771,7 +863,7 @@ void MainWindow::onImportAdif()
     });
 
     m_adifImportWatcher->setFuture(
-        QtConcurrent::run(&runAdifImport, path, backendKey, dbConfig));
+        QtConcurrent::run(&runAdifImport, path, backendKey, dbConfig, myGrid, myLat, myLon));
 }
 
 void MainWindow::onExportAdif()
@@ -1169,7 +1261,7 @@ void MainWindow::onQsoReady(const Qso &qso)
 
 void MainWindow::onEditQso(const QModelIndex &index)
 {
-    if (!index.isValid() || !m_db) return;
+    if (!index.isValid() || !m_db || m_importLock) return;
 
     const int row = index.row();
     const Qso original = m_logModel->qsoAt(row);
@@ -1191,7 +1283,7 @@ void MainWindow::onEditQso(const QModelIndex &index)
 
 void MainWindow::onDeleteSelectedQso()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock) return;
 
     const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
     if (selected.isEmpty()) return;

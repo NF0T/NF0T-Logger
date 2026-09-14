@@ -110,6 +110,14 @@ private:
     // Disable/enable UI entry points while a database migration is running.
     void setMigrationLock(bool locked);
 
+    // Disable/enable UI entry points that read or write m_db while a
+    // background ADIF import is running. Deliberately separate from
+    // setMigrationLock(): an import keeps its own DB connection (m_db is
+    // untouched), so — unlike migration — there is no need to pause digital
+    // listeners. Each lock disables the other's trigger action so the two
+    // operations can't run concurrently.
+    void setImportLock(bool locked);
+
     // Merge a QRZ result on top of a CTY.dat result following precedence rules:
     // CTY.dat is authoritative for zone/DXCC/entity; QRZ fills personal data
     // and overrides lat/lon/gridsquare with the operator's precise location.
@@ -173,6 +181,7 @@ private:
     void showStatusMessage(const QString &msg, int ms = 0);
 
     bool m_migrationLock = false;
+    bool m_importLock    = false;
 
     // Actions
     QAction *m_newQsoAction            = nullptr;
