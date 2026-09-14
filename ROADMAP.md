@@ -197,6 +197,24 @@ The CTY.dat provider supersedes the built-in prefix table in the `Callsign` util
 
 ---
 
+## v26.9.1 — Off-UI-Thread I/O and Radio Backend Cleanup ✓ shipped
+
+Moves the two remaining sources of UI-thread blocking — ADIF import and Hamlib CAT I/O — onto background threads, and fixes a data-integrity gap in custom SQLite deployments.
+
+### ADIF import (#19)
+
+Parsing and inserting records now runs on a background worker via `QtConcurrent::run()`, with its own dedicated database connection. Progress and cooperative cancellation are marshaled back to the UI thread through a `QFutureWatcher`. Inserts are batched into 500-record transactions to keep SQLite WAL write throughput up, and progress updates are throttled to every 25 records to avoid flooding the UI event queue.
+
+### Hamlib CAT control (#18, #21, #22, #24)
+
+Hamlib's blocking C API (`rig_open`, `rig_get_freq`, etc.) no longer runs on the UI thread. `HamlibBackend` was first moved wholesale onto its own `QThread` (#21), then split into a clean **worker-object** design (#22, #24): `HamlibWorker` owns the `RIG*` handle, the 500ms poll timer, and every blocking call on a dedicated thread, while `HamlibBackend` stays a normal `QObject` parented to `MainWindow` with the same synchronous-looking `RadioBackend` API (`connectRadio()`, `disconnectRadio()`, `setFreq()`, `setMode()`) every other backend uses. Shutdown still blocks the UI thread briefly if a Hamlib call is hung mid-teardown — an accepted tradeoff, since Hamlib's blocking API has no cancellation hook.
+
+### Custom SQLite path and migration-lock UI coverage (#20, #23)
+
+A user-configured custom SQLite path was silently ignored in favor of the default app-data location. Also closes UI-coverage gaps during a database migration (log table, filter bar, export, and settings actions weren't disabled the same way an ADIF import already disabled them) and a split-brain hazard where a background ADIF import could target a different database than the one currently open if Settings changed mid-session.
+
+---
+
 ## Future / under consideration
 
 These are ideas that have been discussed but not yet scoped:

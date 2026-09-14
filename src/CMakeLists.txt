@@ -31,6 +31,7 @@ set(SOURCES
     lookup/QrzXmlLookupProvider.cpp
     lookup/CtyDatLookupProvider.cpp
     radio/HamlibBackend.cpp
+    radio/HamlibWorker.cpp
     radio/TciBackend.cpp
     wsjtx/WsjtxService.cpp
     qsl/LoTwService.cpp
@@ -80,6 +81,7 @@ set(HEADERS
     lookup/CtyDatLookupProvider.h
     radio/DigitalListenerService.h
     radio/HamlibBackend.h
+    radio/HamlibWorker.h
     radio/RadioBackend.h
     radio/TciBackend.h
     wsjtx/WsjtxService.h
@@ -122,6 +124,7 @@ target_link_libraries(NF0T-Logger PRIVATE
     Qt6::Network
     Qt6::Sql
     Qt6::WebSockets
+    Qt6::Concurrent
     qt6keychain
 )
 

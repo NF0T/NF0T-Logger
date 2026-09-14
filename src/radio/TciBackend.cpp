@@ -39,7 +39,7 @@ TciBackend::~TciBackend()
 // Connect / disconnect
 // ---------------------------------------------------------------------------
 
-bool TciBackend::connectRadio()
+void TciBackend::connectRadio()
 {
     const Settings &s = Settings::instance();
     const QString host = s.tciHost().isEmpty() ? QStringLiteral("localhost") : s.tciHost();
@@ -53,8 +53,7 @@ bool TciBackend::connectRadio()
     m_lastFreqHz       = 0.0;
     m_lastTciMode.clear();
 
-    m_socket->open(url);
-    return true;  // actual success reported via connected() / error() signals
+    m_socket->open(url);  // success reported via connected() / error() signals
 }
 
 void TciBackend::disconnectRadio()

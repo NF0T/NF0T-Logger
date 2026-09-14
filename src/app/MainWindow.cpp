@@ -5,12 +5,12 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QHeaderView>
 #include <QIcon>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
 #include <QVBoxLayout>
@@ -21,10 +21,13 @@
 #include <QFileDialog>
 #include <QKeySequence>
 #include <QMenu>
+#include <QPointer>
 #include <QProgressDialog>
+#include <QPromise>
 #include <QShortcut>
 #include <QSizePolicy>
 #include <QTimer>
+#include <QtConcurrentRun>
 
 #include "app/settings/SecureSettings.h"
 #include "app/settings/Settings.h"
@@ -156,8 +159,17 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // Disconnect and shut down radio backends before Qt's child destruction
-    // order can deliver signals to already-destroyed status bar widgets.
+    if (m_adifImportWatcher) {
+        QMessageBox::information(this, tr("Import in Progress"),
+            tr("An ADIF import is still running. Cancel it before closing NF0T-Logger."));
+        event->ignore();
+        return;
+    }
+
+    // Sever signal connections before Qt's child destruction order can
+    // deliver signals to already-destroyed status bar widgets, then request
+    // shutdown. ~HamlibBackend() still blocks on its own worker-thread
+    // teardown once actually destroyed (see HamlibBackend.cpp).
     for (RadioBackend *b : m_radioBackends) {
         disconnect(b, nullptr, this, nullptr);
         b->disconnectRadio();
@@ -220,7 +232,9 @@ void MainWindow::setupMenuBar()
 
     m_exitAction = new QAction(tr("E&xit"), this);
     m_exitAction->setShortcut(QKeySequence::Quit);
-    connect(m_exitAction, &QAction::triggered, qApp, &QApplication::quit);
+    // Routed through close() (not qApp->quit() directly) so closeEvent()'s
+    // in-progress-import guard always runs — quit() bypasses closeEvent().
+    connect(m_exitAction, &QAction::triggered, this, &MainWindow::close);
     fileMenu->addAction(m_exitAction);
 
     // --- Radio ---
@@ -448,30 +462,36 @@ void MainWindow::setupStatusBar()
 // Database
 // ---------------------------------------------------------------------------
 
-void MainWindow::openDefaultDatabase()
+QVariantMap MainWindow::currentBackendConfig(QString &keyOut) const
 {
     const Settings &cfg = Settings::instance();
-    const QString backendKey = cfg.dbBackend();   // "sqlite" | "mariadb"
+    keyOut = cfg.dbBackend();   // "sqlite" | "mariadb"
 
-    std::unique_ptr<DatabaseInterface> backend;
-    QVariantMap config;
-
-    if (backendKey == QLatin1String("mariadb")) {
-        config = {
+    if (keyOut == QLatin1String("mariadb")) {
+        return {
             {"host",     cfg.dbMariadbHost()},
             {"port",     cfg.dbMariadbPort()},
             {"database", cfg.dbMariadbDatabase()},
             {"username", cfg.dbMariadbUsername()},
             {"password", cfg.dbMariadbPassword()},
         };
-        backend = std::make_unique<MariaDbBackend>();
-    } else {
-        const QString dataDir =
-            QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-        QDir().mkpath(dataDir);
-        config  = {{"path", dataDir + "/log.db"}};
-        backend = std::make_unique<SqliteBackend>();
     }
+
+    const QString path = cfg.resolvedSqlitePath();
+    QDir().mkpath(QFileInfo(path).path());
+    return {{"path", path}};
+}
+
+void MainWindow::openDefaultDatabase()
+{
+    QString backendKey;
+    const QVariantMap config = currentBackendConfig(backendKey);
+
+    std::unique_ptr<DatabaseInterface> backend;
+    if (backendKey == QLatin1String("mariadb"))
+        backend = std::make_unique<MariaDbBackend>();
+    else
+        backend = std::make_unique<SqliteBackend>();
 
     if (auto r = backend->open(config); !r) {
         QMessageBox::critical(this, tr("Database Error"),
@@ -486,8 +506,10 @@ void MainWindow::openDefaultDatabase()
     }
 
     m_db = std::move(backend);
+    m_activeDbBackendKey = backendKey;
+    m_activeDbConfig = config;
     const QString label = backendKey == QLatin1String("mariadb")
-        ? tr("MariaDB (%1)").arg(cfg.dbMariadbHost())
+        ? tr("MariaDB (%1)").arg(config["host"].toString())
         : config["path"].toString();
     showStatusMessage(tr("Database opened: %1").arg(label), 4000);
     reloadLog();
@@ -514,14 +536,25 @@ void MainWindow::updateQsoCount()
 
 void MainWindow::setMigrationLock(bool locked)
 {
+    // m_db itself is being replaced during a migration, so digital listeners
+    // are paused too (an in-flight auto-log write must not race the switch).
+    // Also locks out the ADIF import action — see setImportLock()'s comment
+    // for why the two operations exclude each other but aren't merged.
+    // Mirrors setImportLock()'s UI coverage for everything else that reads
+    // or writes m_db (or the settings governing it) from the UI thread.
     m_migrationLock = locked;
     m_entryPanel->setEnabled(!locked);
     m_newQsoAction->setEnabled(!locked);
     m_newLogAction->setEnabled(!locked &&
         Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_logView->setEnabled(!locked);
+    m_filterBar->setEnabled(!locked);
+    m_exportAdifAction->setEnabled(!locked);
+    m_settingsAction->setEnabled(!locked);
     m_qslDownloadAction->setEnabled(!locked);
     m_qslUploadAction->setEnabled(!locked);
     m_migrateDatabaseAction->setEnabled(!locked);
+    m_importAdifAction->setEnabled(!locked);
 
     for (DigitalListenerService *svc : m_digitalListeners) {
         if (locked  && svc->isRunning())  svc->stop();
@@ -529,9 +562,30 @@ void MainWindow::setMigrationLock(bool locked)
     }
 }
 
+void MainWindow::setImportLock(bool locked)
+{
+    // Unlike setMigrationLock(), the import worker never touches m_db — it
+    // opens its own connection — so digital listeners keep running and don't
+    // need pausing (pausing them would silently drop live FT8/FT4 contacts
+    // for no correctness reason). What does need locking out is anything
+    // else that reads or writes m_db on the UI thread while the worker is
+    // writing to the same file on its own connection.
+    m_importLock = locked;
+    m_entryPanel->setEnabled(!locked);
+    m_logView->setEnabled(!locked);
+    m_filterBar->setEnabled(!locked);
+    m_newLogAction->setEnabled(!locked &&
+        Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_exportAdifAction->setEnabled(!locked);
+    m_qslDownloadAction->setEnabled(!locked);
+    m_qslUploadAction->setEnabled(!locked);
+    m_migrateDatabaseAction->setEnabled(!locked);
+    m_settingsAction->setEnabled(!locked);
+}
+
 void MainWindow::onMigrateDatabase()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock) return;
 
     setMigrationLock(true);
 
@@ -597,7 +651,11 @@ void MainWindow::onNewLog()
 }
 
 // Derive missing lat/lon from gridsquare and compute distance from my station.
-static void enrichQso(Qso &qso)
+// Takes the station position explicitly so callers that run many QSOs in a
+// tight loop (the ADIF import worker) can read Settings once up front instead
+// of re-querying it per record.
+static void enrichQsoWithStation(Qso &qso, const QString &myGrid,
+                                  std::optional<double> myLat, std::optional<double> myLon)
 {
     // Derive DX lat/lon from grid square if not explicitly provided
     if (!qso.gridsquare.isEmpty() && !qso.lat.has_value()) {
@@ -614,81 +672,217 @@ static void enrichQso(Qso &qso)
     if (!qso.lat.has_value()) return;
 
     // Prefer my grid square for my position; fall back to stored lat/lon
-    const QString myGrid = Settings::instance().stationGridsquare();
     if (!myGrid.isEmpty()) {
         if (auto d = Maidenhead::distanceKm(myGrid, *qso.lat, *qso.lon))
             qso.distance = *d;
-    } else {
-        const auto mLat = Settings::instance().stationLat();
-        const auto mLon = Settings::instance().stationLon();
-        if (mLat.has_value() && mLon.has_value())
-            qso.distance = Maidenhead::distanceKm(*mLat, *mLon, *qso.lat, *qso.lon);
+    } else if (myLat.has_value() && myLon.has_value()) {
+        qso.distance = Maidenhead::distanceKm(*myLat, *myLon, *qso.lat, *qso.lon);
     }
 }
 
+static void enrichQso(Qso &qso)
+{
+    enrichQsoWithStation(qso, Settings::instance().stationGridsquare(),
+                         Settings::instance().stationLat(), Settings::instance().stationLon());
+}
+
+namespace {
+
+// Opens a fresh, short-lived connection to the given backend — used by the
+// ADIF import worker thread, which cannot share MainWindow's own m_db
+// connection (Qt SQL connections may only be used by the thread that opened
+// them). The schema already exists on this database, so unlike
+// MigrateDatabaseDialog's target connection, this one skips initSchema().
+std::unique_ptr<DatabaseInterface> openBackendForImport(const QString &backendKey,
+                                                         const QVariantMap &config,
+                                                         QString &errorOut)
+{
+    std::unique_ptr<DatabaseInterface> backend;
+    if (backendKey == QLatin1String("mariadb"))
+        backend = std::make_unique<MariaDbBackend>();
+    else
+        backend = std::make_unique<SqliteBackend>();
+
+    if (auto r = backend->open(config); !r) {
+        errorOut = r.error();
+        return nullptr;
+    }
+    return backend;
+}
+
+// How many inserts to batch per transaction. Bounds both how long the import
+// connection can hold a write lock at once (relevant to SqliteBackend's
+// PRAGMA busy_timeout, since the UI thread's own connection may be reading
+// concurrently) and how much work an autocommit-per-row loop would otherwise
+// force SQLite to fsync.
+constexpr int kImportBatchSize = 500;
+
+// Only post a progress update every this many records — QPromise's progress
+// signal is thread-marshaled to the UI on every call, so updating on every
+// single record is unnecessary UI-thread traffic for a large import.
+constexpr int kProgressUpdateStride = 25;
+
+// Runs on a QtConcurrent worker thread. Parses the file and inserts each QSO
+// through its own DB connection; progress goes through QPromise, which
+// QFutureWatcher marshals back to the UI thread.
+//
+// Cancellation note: once the associated QFuture is canceled (watcher->cancel()),
+// QPromise::addResult() silently discards whatever is passed to it — this is
+// Qt's own documented behavior (QFutureInterface::reportResult() refuses to
+// store a result once the Canceled state is set). So a canceled run never
+// reports a result at all; the caller must check QFutureWatcher::isCanceled()
+// before calling result(), not just check whether the call succeeded.
+void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
+                    const QString &backendKey, const QVariantMap &dbConfig,
+                    const QString &myGrid, std::optional<double> myLat, std::optional<double> myLon)
+{
+    AdifImportResult result;
+
+    QString openError;
+    std::unique_ptr<DatabaseInterface> db = openBackendForImport(backendKey, dbConfig, openError);
+    if (!db) {
+        ++result.errors;
+        result.errorDetails << QObject::tr("Could not open database for import: %1").arg(openError);
+        promise.addResult(result);
+        return;
+    }
+
+    const AdifParser::Result parsed = AdifParser::parseFile(path);
+    result.skipped = parsed.skipped;
+    result.errorDetails = parsed.warnings;
+
+    promise.setProgressRange(0, parsed.qsos.size());
+
+    db->beginTransaction();
+    int sinceCommit = 0;
+
+    for (int i = 0; i < parsed.qsos.size(); ++i) {
+        if (promise.isCanceled()) break;
+
+        Qso qso = parsed.qsos.at(i);
+        enrichQsoWithStation(qso, myGrid, myLat, myLon);
+        if (auto r = db->insertQso(qso); !r) {
+            const QString &err = r.error();
+            // Unique constraint violations are expected for duplicates
+            if (err.contains("UNIQUE", Qt::CaseInsensitive) ||
+                err.contains("Duplicate", Qt::CaseInsensitive)) {
+                ++result.duplicates;
+            } else {
+                ++result.errors;
+                result.errorDetails << QStringLiteral("Insert failed for %1: %2").arg(qso.callsign, err);
+            }
+        } else {
+            ++result.imported;
+        }
+
+        if (++sinceCommit >= kImportBatchSize) {
+            db->commitTransaction();
+            db->beginTransaction();
+            sinceCommit = 0;
+        }
+
+        if (i % kProgressUpdateStride == 0 || i + 1 == parsed.qsos.size())
+            promise.setProgressValue(i + 1);
+    }
+
+    db->commitTransaction();
+    promise.addResult(result);
+}
+
+} // namespace
+
 void MainWindow::onImportAdif()
 {
-    if (!m_db) return;
+    if (!m_db || m_migrationLock || m_importLock || m_adifImportWatcher) return;
 
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Import ADIF"), QString(),
         tr("ADIF Files (*.adi *.adif);;All Files (*)"));
     if (path.isEmpty()) return;
 
-    QProgressDialog progress(tr("Parsing ADIF file…"), tr("Cancel"), 0, 0, this);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(300);
-    progress.setValue(0);
-    qApp->processEvents();
+    // Target the database m_db is actually connected to, not whatever
+    // Settings currently says — a user can change the DB backend/path in
+    // Settings without restarting, and Database settings only take effect
+    // on restart. Re-deriving from Settings here would let the import write
+    // into a different file/server than m_db, silently splitting the data.
+    const QString backendKey = m_activeDbBackendKey;
+    const QVariantMap dbConfig = m_activeDbConfig;
 
-    const AdifParser::Result parsed = AdifParser::parseFile(path);
+    // Read the station position once, on the UI thread, instead of letting
+    // the worker re-query Settings (a fresh QSettings + disk/registry round
+    // trip) for every single QSO.
+    const QString myGrid = Settings::instance().stationGridsquare();
+    const auto myLat = Settings::instance().stationLat();
+    const auto myLon = Settings::instance().stationLon();
 
-    int imported = 0, duplicates = 0, errors = 0;
-    QStringList errorDetails = parsed.warnings;
+    // No Qt::WA_DeleteOnClose: QProgressDialog auto-closes itself once its
+    // value reaches maximum() (and closing it by any means — Cancel, Escape,
+    // or the window's close button — all route through the same canceled()
+    // signal). If the dialog also deleted itself on that auto-close, the
+    // finished-handler lambda below would be left holding a dangling pointer
+    // whenever it ran afterward. Instead this code owns the dialog's lifetime
+    // explicitly via deleteLater() in that same handler.
+    auto *progress = new QProgressDialog(tr("Parsing ADIF file…"), tr("Cancel"), 0, 0, this);
+    progress->setWindowModality(Qt::WindowModal);
+    progress->setMinimumDuration(300);
+    QPointer<QProgressDialog> progressGuard(progress);
 
-    progress.setMaximum(parsed.qsos.size());
-    for (int i = 0; i < parsed.qsos.size(); ++i) {
-        if (progress.wasCanceled()) break;
-        progress.setValue(i);
+    setImportLock(true);
 
-        Qso qso = parsed.qsos.at(i);
-        enrichQso(qso);
-        if (auto r = m_db->insertQso(qso); !r) {
-            const QString &err = r.error();
-            // Unique constraint violations are expected for duplicates
-            if (err.contains("UNIQUE", Qt::CaseInsensitive) ||
-                err.contains("Duplicate", Qt::CaseInsensitive)) {
-                ++duplicates;
-            } else {
-                ++errors;
-                errorDetails << QString("Insert failed for %1: %2").arg(qso.callsign, err);
-            }
-        } else {
-            ++imported;
+    m_adifImportWatcher = new QFutureWatcher<AdifImportResult>(this);
+
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::progressRangeChanged,
+            progress, &QProgressDialog::setRange);
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::progressValueChanged,
+            progress, &QProgressDialog::setValue);
+    connect(progress, &QProgressDialog::canceled,
+            m_adifImportWatcher, &QFutureWatcherBase::cancel);
+
+    connect(m_adifImportWatcher, &QFutureWatcher<AdifImportResult>::finished, this, [this, progressGuard]() {
+        // A canceled future never got a result reported to it — QPromise::addResult()
+        // silently discards results after cancellation (Qt's own behavior, not a bug
+        // in the worker). Calling result() in that case would fail on an empty result
+        // store, so it must never be called unless the run actually completed.
+        const bool wasCanceled = m_adifImportWatcher->isCanceled();
+        const AdifImportResult result = wasCanceled ? AdifImportResult{} : m_adifImportWatcher->result();
+
+        if (progressGuard) {
+            progressGuard->close();
+            progressGuard->deleteLater();
         }
-    }
-    progress.setValue(parsed.qsos.size());
+        setImportLock(false);
+        m_adifImportWatcher->deleteLater();
+        m_adifImportWatcher = nullptr;
 
-    reloadLog();
+        reloadLog();
 
-    QString summary = tr("Import complete.\n\nImported: %1\nDuplicates skipped: %2\n"
-                         "Parse errors: %3\nDB errors: %4")
-                          .arg(imported).arg(duplicates)
-                          .arg(parsed.skipped).arg(errors);
+        if (wasCanceled) {
+            showStatusMessage(tr("ADIF import canceled. Records inserted before cancellation were kept."), 5000);
+            return;
+        }
 
-    if (errorDetails.isEmpty()) {
-        QMessageBox::information(this, tr("ADIF Import"), summary);
-    } else {
-        QMessageBox *box = new QMessageBox(QMessageBox::Warning, tr("ADIF Import"),
-                                           summary, QMessageBox::Ok, this);
-        box->setDetailedText(errorDetails.join('\n'));
-        box->exec();
-    }
+        const QString summary = tr("Import complete.\n\nImported: %1\nDuplicates skipped: %2\n"
+                                   "Parse errors: %3\nDB errors: %4")
+                                      .arg(result.imported).arg(result.duplicates)
+                                      .arg(result.skipped).arg(result.errors);
+
+        if (result.errorDetails.isEmpty()) {
+            QMessageBox::information(this, tr("ADIF Import"), summary);
+        } else {
+            QMessageBox *box = new QMessageBox(QMessageBox::Warning, tr("ADIF Import"),
+                                               summary, QMessageBox::Ok, this);
+            box->setDetailedText(result.errorDetails.join('\n'));
+            box->exec();
+        }
+    });
+
+    m_adifImportWatcher->setFuture(
+        QtConcurrent::run(&runAdifImport, path, backendKey, dbConfig, myGrid, myLat, myLon));
 }
 
 void MainWindow::onExportAdif()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock || m_migrationLock) return;
 
     const QString path = QFileDialog::getSaveFileName(
         this, tr("Export ADIF"), QString(),
@@ -741,6 +935,12 @@ void MainWindow::onConnectHamlib()
             tr("Hamlib is not enabled. Enable it in Settings \u2192 Radio."));
         return;
     }
+    // Disable eagerly rather than waiting for connected(): connectRadio() is
+    // dispatched asynchronously now, so without this a second click (or a
+    // click on the other backend's Connect action) queued before the first
+    // attempt resolves could reach the backend while it's mid-connect.
+    for (QAction *act : m_radioConnectActions)
+        act->setEnabled(false);
     m_hamlibBackend->connectRadio();
 }
 
@@ -751,6 +951,8 @@ void MainWindow::onConnectTci()
             tr("TCI is not enabled. Enable it in Settings \u2192 Radio."));
         return;
     }
+    for (QAction *act : m_radioConnectActions)
+        act->setEnabled(false);
     m_tciBackend->connectRadio();
 }
 
@@ -807,6 +1009,13 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
 
     connect(backend, &RadioBackend::error, this, [this, backend, indicator](const QString &msg) {
         setIndicatorState(indicator, IndicatorState::Fault);
+        // A failed connect attempt (rig_init/rig_open failure, etc.) never
+        // reaches connected(), so onConnectHamlib()/onConnectTci()'s eager
+        // disable would otherwise leave the Connect actions stuck disabled.
+        if (!anyRadioConnected()) {
+            for (QAction *act : m_radioConnectActions)
+                act->setEnabled(true);
+        }
         showStatusMessage(
             tr("%1 error: %2").arg(backend->displayName(), msg), 6000);
     });
@@ -1081,7 +1290,7 @@ void MainWindow::onQsoReady(const Qso &qso)
 
 void MainWindow::onEditQso(const QModelIndex &index)
 {
-    if (!index.isValid() || !m_db) return;
+    if (!index.isValid() || !m_db || m_importLock || m_migrationLock) return;
 
     const int row = index.row();
     const Qso original = m_logModel->qsoAt(row);
@@ -1103,7 +1312,7 @@ void MainWindow::onEditQso(const QModelIndex &index)
 
 void MainWindow::onDeleteSelectedQso()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock || m_migrationLock) return;
 
     const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
     if (selected.isEmpty()) return;
@@ -1159,7 +1368,7 @@ void MainWindow::onDeleteSelectedQso()
 
 void MainWindow::onExportSelectedQsos()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock || m_migrationLock) return;
 
     const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
     if (selected.isEmpty()) return;

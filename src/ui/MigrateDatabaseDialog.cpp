@@ -44,7 +44,7 @@ MigrateDatabaseDialog::MigrateDatabaseDialog(DatabaseInterface *source, QWidget 
     // Source info
     QString srcDesc;
     if (srcIsSqlite)
-        srcDesc = tr("SQLite: %1").arg(s.dbSqlitePath());
+        srcDesc = tr("SQLite: %1").arg(s.resolvedSqlitePath());
     else
         srcDesc = tr("MariaDB: %1/%2").arg(s.dbMariadbHost(), s.dbMariadbDatabase());
     const int srcCount = m_source->qsoCount().value_or(-1);
