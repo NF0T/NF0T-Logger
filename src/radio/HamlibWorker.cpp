@@ -15,6 +15,16 @@ HamlibWorker::HamlibWorker(QObject *parent)
     connect(m_pollTimer, &QTimer::timeout, this, &HamlibWorker::poll);
 }
 
+HamlibWorker::~HamlibWorker()
+{
+    // Belt-and-suspenders: HamlibBackend's destructor already calls
+    // doDisconnect() synchronously before this object is ever scheduled for
+    // deleteLater(), so m_rig is normally already null here. This exists so
+    // the RIG* handle still gets released if that ever stops being true —
+    // idempotent, like every other doDisconnect() call site.
+    doDisconnect();
+}
+
 // ---------------------------------------------------------------------------
 // Connect / disconnect
 // ---------------------------------------------------------------------------

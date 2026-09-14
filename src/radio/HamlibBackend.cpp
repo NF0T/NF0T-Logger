@@ -34,19 +34,33 @@ HamlibBackend::HamlibBackend(QObject *parent)
 
 HamlibBackend::~HamlibBackend()
 {
-    // Known accepted limitation (see issue #22 / PR #21 review): if
-    // m_workerThread is blocked inside a Hamlib call (e.g. rig_open() hung
-    // on a dead network host) when this runs, this BlockingQueuedConnection
-    // call blocks the UI thread until that call returns or times out. This
+    // The wait() below is unconditional, not merely defensive: m_workerThread
+    // is an embedded QThread member, and Qt does not support destroying a
+    // QThread object while its thread is still running — doing so abandons
+    // the running OS thread while its QThreadPrivate is torn out from under
+    // it. So this object cannot finish destructing until the worker thread
+    // has actually returned from its event loop, however long that takes.
+    //
+    // Known accepted limitation (see issue #22 / PR #21 review): if the
+    // worker is blocked inside a Hamlib call (e.g. rig_open() hung on a dead
+    // network host) when this runs, that requirement means quit()+wait()
+    // below blocks the UI thread until the call returns or times out. This
     // reintroduces, at shutdown only, a bounded version of the freeze #18
-    // removed from normal polling. There's no safe way to bound it further
-    // here: Hamlib's blocking C API has no cancellation hook, and
-    // Qt::BlockingQueuedConnection has no timeout — abandoning the wait
-    // would let m_workerThread keep touching m_worker's RIG* handle after
-    // deleteLater() (triggered below via QThread::finished) destroys it,
-    // which is worse.
-    QMetaObject::invokeMethod(m_worker, &HamlibWorker::doDisconnect,
-                               Qt::BlockingQueuedConnection);
+    // removed from normal polling. There's no safe way to bound it further:
+    // Hamlib's blocking C API has no cancellation hook.
+    //
+    // We still disconnect synchronously first (rather than leaving cleanup
+    // to ~HamlibWorker(), which runs later via deleteLater() once the thread
+    // finishes) so the rig is closed gracefully and disconnected() fires
+    // deterministically before this call returns. Guard it with isRunning():
+    // Qt::BlockingQueuedConnection has no timeout, and if m_workerThread never
+    // started (or already stopped) there is no event loop left to deliver
+    // it, which would deadlock the UI thread forever instead of just for a
+    // bounded time.
+    if (m_workerThread.isRunning()) {
+        QMetaObject::invokeMethod(m_worker, &HamlibWorker::doDisconnect,
+                                   Qt::BlockingQueuedConnection);
+    }
     m_workerThread.quit();
     m_workerThread.wait();
 }

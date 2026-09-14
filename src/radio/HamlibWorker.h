@@ -25,6 +25,7 @@ class HamlibWorker : public QObject
 
 public:
     explicit HamlibWorker(QObject *parent = nullptr);
+    ~HamlibWorker() override;
 
 public slots:
     void doConnect();
