@@ -1,8 +1,18 @@
 name: Release
 
+# Triggered by the version bump landing on main, not by a tag push. GitHub's
+# Immutable Releases feature permanently locks a release's assets the instant
+# it's published, with no exceptions — so a tag-push trigger is a trap: the
+# only way to create a tag through the GitHub Release UI/API is to publish,
+# and by then it's too late to attach anything. This workflow owns the whole
+# sequence itself (build -> sign -> upload -> publish, in that order) so
+# there is no manual "push a tag" or "publish the draft" step left for a
+# human to get wrong. See detect-version below for how it avoids re-releasing
+# on every ordinary push to main.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -10,10 +20,40 @@ permissions:
 jobs:
 
   # ---------------------------------------------------------------------------
+  # Only proceed if this push actually bumped CalVer past the last tag —
+  # every other push to main (CI-only fixes, etc.) is a no-op here.
+  # ---------------------------------------------------------------------------
+  detect-version:
+    name: Detect New Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_release: ${{ steps.check.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for a new CalVer version
+        id: check
+        run: |
+          VERSION=$(grep -m1 '^\s*VERSION [0-9]' CMakeLists.txt | grep -oP '\d+\.\d+\.\d+(\.\d+)?')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "v$VERSION already tagged — nothing to release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "v$VERSION is new — releasing"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
   # Windows — MSYS2 MinGW64 NSIS installer
   # ---------------------------------------------------------------------------
   package-windows:
     name: Windows NSIS Installer
+    needs: detect-version
+    if: needs.detect-version.outputs.should_release == 'true'
     runs-on: windows-2022
 
     steps:
@@ -58,6 +98,8 @@ jobs:
   # ---------------------------------------------------------------------------
   package-linux:
     name: Linux AppImage
+    needs: detect-version
+    if: needs.detect-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie
@@ -92,10 +134,9 @@ jobs:
 
       - name: Build AppImage
         env:
-          LINUXDEPLOY_OUTPUT_VERSION: ${{ github.ref_name }}
+          LINUXDEPLOY_OUTPUT_VERSION: ${{ needs.detect-version.outputs.version }}
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
-          LINUXDEPLOY_OUTPUT_VERSION=${LINUXDEPLOY_OUTPUT_VERSION#v}
           export LINUXDEPLOY_OUTPUT_VERSION
           export QMAKE=$(which qmake6 2>/dev/null || find /usr -name qmake6 2>/dev/null | head -1)
           echo "Using qmake6: $QMAKE"
@@ -118,7 +159,8 @@ jobs:
   # ---------------------------------------------------------------------------
   sign-and-upload:
     name: Sign and Upload to Release
-    needs: [package-windows, package-linux]
+    needs: [detect-version, package-windows, package-linux]
+    if: needs.detect-version.outputs.should_release == 'true'
     runs-on: ubuntu-22.04
 
     steps:
@@ -143,22 +185,39 @@ jobs:
               <<< "$GPG_PASSPHRASE"
           done
 
-      - name: Create or upload to GitHub release
+      - name: Attach assets to the draft release, then publish last
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ needs.detect-version.outputs.version }}
         run: |
-          # Create the release if it doesn't already exist (release-drafter may have pre-created it)
-          gh release view "${{ github.ref_name }}" --repo "${{ github.repository }}" \
-            --json tagName 2>/dev/null \
-            || gh release create "${{ github.ref_name }}" \
-                 --repo "${{ github.repository }}" \
-                 --draft \
-                 --title "${{ github.ref_name }}" \
-                 --generate-notes
-          gh release upload "${{ github.ref_name }}" \
+          # release-drafter normally already has a draft for this tag; create
+          # one if it somehow doesn't. Either way this release must still be a
+          # draft at this point — nothing upstream of this job is permitted to
+          # publish it first.
+          if gh release view "$TAG" --repo "${{ github.repository }}" --json isDraft --jq .isDraft > /tmp/is_draft 2>/dev/null; then
+            if [ "$(cat /tmp/is_draft)" != "true" ]; then
+              echo "::error::$TAG is already published — its assets are permanently immutable and this job cannot attach anything to it. Someone/something published it before this job could upload. Delete and recreate the release for $TAG, then fix whatever published it early." >&2
+              exit 1
+            fi
+          else
+            gh release create "$TAG" \
+              --repo "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --draft \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+          # Safe: uploading to a still-draft release is always allowed.
+          gh release upload "$TAG" \
             --repo "${{ github.repository }}" \
             --clobber \
             NF0T-Logger-*.exe \
             NF0T-Logger-*.exe.asc \
             NF0T-Logger-*.AppImage \
             NF0T-Logger-*.AppImage.asc
+
+          # Publish LAST, only now that assets are confirmed attached. This is
+          # the only place in the whole pipeline allowed to flip draft off —
+          # never do this by hand from the GitHub UI or CLI.
+          gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false
