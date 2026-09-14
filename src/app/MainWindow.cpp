@@ -5,13 +5,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QHeaderView>
 #include <QIcon>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMetaObject>
-#include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableView>
 #include <QVBoxLayout>
@@ -485,10 +485,9 @@ QVariantMap MainWindow::currentBackendConfig(QString &keyOut) const
         };
     }
 
-    const QString dataDir =
-        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-    QDir().mkpath(dataDir);
-    return {{"path", dataDir + "/log.db"}};
+    const QString path = cfg.resolvedSqlitePath();
+    QDir().mkpath(QFileInfo(path).path());
+    return {{"path", path}};
 }
 
 void MainWindow::openDefaultDatabase()
@@ -515,6 +514,8 @@ void MainWindow::openDefaultDatabase()
     }
 
     m_db = std::move(backend);
+    m_activeDbBackendKey = backendKey;
+    m_activeDbConfig = config;
     const QString label = backendKey == QLatin1String("mariadb")
         ? tr("MariaDB (%1)").arg(config["host"].toString())
         : config["path"].toString();
@@ -547,11 +548,17 @@ void MainWindow::setMigrationLock(bool locked)
     // are paused too (an in-flight auto-log write must not race the switch).
     // Also locks out the ADIF import action — see setImportLock()'s comment
     // for why the two operations exclude each other but aren't merged.
+    // Mirrors setImportLock()'s UI coverage for everything else that reads
+    // or writes m_db (or the settings governing it) from the UI thread.
     m_migrationLock = locked;
     m_entryPanel->setEnabled(!locked);
     m_newQsoAction->setEnabled(!locked);
     m_newLogAction->setEnabled(!locked &&
         Settings::instance().dbBackend() != QLatin1String("mariadb"));
+    m_logView->setEnabled(!locked);
+    m_filterBar->setEnabled(!locked);
+    m_exportAdifAction->setEnabled(!locked);
+    m_settingsAction->setEnabled(!locked);
     m_qslDownloadAction->setEnabled(!locked);
     m_qslUploadAction->setEnabled(!locked);
     m_migrateDatabaseAction->setEnabled(!locked);
@@ -801,8 +808,13 @@ void MainWindow::onImportAdif()
         tr("ADIF Files (*.adi *.adif);;All Files (*)"));
     if (path.isEmpty()) return;
 
-    QString backendKey;
-    const QVariantMap dbConfig = currentBackendConfig(backendKey);
+    // Target the database m_db is actually connected to, not whatever
+    // Settings currently says — a user can change the DB backend/path in
+    // Settings without restarting, and Database settings only take effect
+    // on restart. Re-deriving from Settings here would let the import write
+    // into a different file/server than m_db, silently splitting the data.
+    const QString backendKey = m_activeDbBackendKey;
+    const QVariantMap dbConfig = m_activeDbConfig;
 
     // Read the station position once, on the UI thread, instead of letting
     // the worker re-query Settings (a fresh QSettings + disk/registry round
@@ -878,7 +890,7 @@ void MainWindow::onImportAdif()
 
 void MainWindow::onExportAdif()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock || m_migrationLock) return;
 
     const QString path = QFileDialog::getSaveFileName(
         this, tr("Export ADIF"), QString(),
@@ -1286,7 +1298,7 @@ void MainWindow::onQsoReady(const Qso &qso)
 
 void MainWindow::onEditQso(const QModelIndex &index)
 {
-    if (!index.isValid() || !m_db || m_importLock) return;
+    if (!index.isValid() || !m_db || m_importLock || m_migrationLock) return;
 
     const int row = index.row();
     const Qso original = m_logModel->qsoAt(row);
@@ -1308,7 +1320,7 @@ void MainWindow::onEditQso(const QModelIndex &index)
 
 void MainWindow::onDeleteSelectedQso()
 {
-    if (!m_db || m_importLock) return;
+    if (!m_db || m_importLock || m_migrationLock) return;
 
     const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
     if (selected.isEmpty()) return;
@@ -1364,7 +1376,7 @@ void MainWindow::onDeleteSelectedQso()
 
 void MainWindow::onExportSelectedQsos()
 {
-    if (!m_db) return;
+    if (!m_db || m_importLock || m_migrationLock) return;
 
     const QModelIndexList selected = m_logView->selectionModel()->selectedRows();
     if (selected.isEmpty()) return;

@@ -92,8 +92,12 @@ private:
 
     // Builds the config map for the currently-configured backend (Settings),
     // and reports which backend key ("sqlite" | "mariadb") it belongs to.
-    // Shared by openDefaultDatabase() and the background ADIF import, which
-    // opens its own second connection to the same database.
+    // Only call this to (re)open m_db — openDefaultDatabase() caches the
+    // result into m_activeDbConfig/m_activeDbBackendKey. Anything else that
+    // needs "the database m_db is connected to" (e.g. the background ADIF
+    // import, which opens its own second connection to the same database)
+    // must read those cached members instead of calling this again, since
+    // Settings can change before the app restarts — see their declaration.
     QVariantMap currentBackendConfig(QString &keyOut) const;
 
     // Wire a radio backend's signals to the entry panel and status bar.
@@ -133,6 +137,16 @@ private:
     // Database + model
     std::unique_ptr<DatabaseInterface> m_db;
     QsoTableModel *m_logModel = nullptr;
+
+    // The backend key/config m_db was actually opened with, cached at open
+    // time (openDefaultDatabase()). Settings::dbBackend()/resolvedSqlitePath()
+    // can change the moment a user edits Settings and clicks OK — Database
+    // settings only take effect after a restart, so anything targeting "the
+    // currently open database" (e.g. the ADIF import worker) must read these
+    // cached values rather than re-deriving from Settings, or it would target
+    // a different file/server than m_db is connected to.
+    QString m_activeDbBackendKey;
+    QVariantMap m_activeDbConfig;
 
     // Background ADIF import (see onImportAdif()). Non-null while an import
     // is in flight; closeEvent() refuses to close the window until it clears.
