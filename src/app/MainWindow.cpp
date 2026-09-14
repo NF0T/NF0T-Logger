@@ -11,7 +11,6 @@
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QMetaObject>
 #include <QStatusBar>
 #include <QTableView>
 #include <QVBoxLayout>
@@ -111,7 +110,7 @@ MainWindow::MainWindow(QWidget *parent)
         m_newLogAction->setEnabled(false);
 
     // Radio backends — wire generically, then auto-connect if configured
-    m_hamlibBackend = new HamlibBackend();
+    m_hamlibBackend = new HamlibBackend(this);
     m_tciBackend    = new TciBackend(this);
     m_radioBackends       = {m_hamlibBackend, m_tciBackend};
     m_radioConnectActions = {m_connectHamlibAction, m_connectTciAction};
@@ -120,9 +119,9 @@ MainWindow::MainWindow(QWidget *parent)
         wireRadioBackend(b);
 
     if (Settings::instance().hamlibEnabled())
-        QMetaObject::invokeMethod(m_hamlibBackend, &RadioBackend::connectRadio, Qt::QueuedConnection);
+        m_hamlibBackend->connectRadio();
     if (Settings::instance().tciEnabled())
-        QMetaObject::invokeMethod(m_tciBackend, &RadioBackend::connectRadio, Qt::QueuedConnection);
+        m_tciBackend->connectRadio();
 
     // QSL services — single list used by both dialogs
     m_lotwService    = new LoTwService(this);
@@ -156,13 +155,7 @@ MainWindow::MainWindow(QWidget *parent)
         QTimer::singleShot(500, this, &MainWindow::onWhatsNew);
 }
 
-MainWindow::~MainWindow()
-{
-    // m_hamlibBackend has no QObject parent (it can't — it lives on its own
-    // thread, and moveToThread() refuses parented objects), so nothing else
-    // deletes it.
-    delete m_hamlibBackend;
-}
+MainWindow::~MainWindow() = default;
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
@@ -175,12 +168,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     // Sever signal connections before Qt's child destruction order can
     // deliver signals to already-destroyed status bar widgets, then request
-    // shutdown. This is async (Qt::QueuedConnection) for backends that may
-    // live on a worker thread; ~HamlibBackend() still blocks on its own
-    // teardown before the object is actually destroyed.
+    // shutdown. ~HamlibBackend() still blocks on its own worker-thread
+    // teardown once actually destroyed (see HamlibBackend.cpp).
     for (RadioBackend *b : m_radioBackends) {
         disconnect(b, nullptr, this, nullptr);
-        QMetaObject::invokeMethod(b, &RadioBackend::disconnectRadio, Qt::QueuedConnection);
+        b->disconnectRadio();
     }
 
     Settings::instance().setMainWindowGeometry(saveGeometry());
@@ -949,7 +941,7 @@ void MainWindow::onConnectHamlib()
     // attempt resolves could reach the backend while it's mid-connect.
     for (QAction *act : m_radioConnectActions)
         act->setEnabled(false);
-    QMetaObject::invokeMethod(m_hamlibBackend, &RadioBackend::connectRadio, Qt::QueuedConnection);
+    m_hamlibBackend->connectRadio();
 }
 
 void MainWindow::onConnectTci()
@@ -961,13 +953,13 @@ void MainWindow::onConnectTci()
     }
     for (QAction *act : m_radioConnectActions)
         act->setEnabled(false);
-    QMetaObject::invokeMethod(m_tciBackend, &RadioBackend::connectRadio, Qt::QueuedConnection);
+    m_tciBackend->connectRadio();
 }
 
 void MainWindow::onDisconnectRadio()
 {
     for (RadioBackend *b : m_radioBackends)
-        QMetaObject::invokeMethod(b, &RadioBackend::disconnectRadio, Qt::QueuedConnection);
+        b->disconnectRadio();
 }
 
 // ---------------------------------------------------------------------------
