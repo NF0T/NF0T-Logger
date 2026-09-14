@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #include "HamlibBackend.h"
 
+#include <QMetaObject>
 #include <QTimer>
 
 #include "app/settings/Settings.h"
@@ -10,28 +11,48 @@
 // Construction / destruction
 // ---------------------------------------------------------------------------
 
-HamlibBackend::HamlibBackend(QObject *parent)
-    : RadioBackend(parent)
+HamlibBackend::HamlibBackend()
+    : RadioBackend(nullptr)
 {
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(500);
     connect(m_pollTimer, &QTimer::timeout, this, &HamlibBackend::poll);
+
+    // m_pollTimer moves with us since it's parented to `this`.
+    moveToThread(&m_thread);
+    m_thread.start();
 }
 
 HamlibBackend::~HamlibBackend()
 {
-    disconnectRadio();
+    // Only MainWindow ever deletes this object, and only from the UI thread
+    // — never from inside m_thread itself, which would deadlock on wait().
+    //
+    // Known accepted limitation: if m_thread is blocked inside a Hamlib call
+    // (e.g. rig_open() hung on a dead network host) when this runs, this
+    // BlockingQueuedConnection call blocks the UI thread until that call
+    // returns or times out. This reintroduces, at shutdown only, a bounded
+    // version of the freeze #18 removed from normal polling. There's no safe
+    // way to bound it further here: Hamlib's blocking C API has no
+    // cancellation hook, and Qt::BlockingQueuedConnection has no timeout —
+    // abandoning the wait would let this object's destructor proceed while
+    // m_thread is still touching its members (use-after-free), which is
+    // worse. See PR #21 review discussion.
+    QMetaObject::invokeMethod(this, &HamlibBackend::disconnectRadio,
+                               Qt::BlockingQueuedConnection);
+    m_thread.quit();
+    m_thread.wait();
 }
 
 // ---------------------------------------------------------------------------
 // Connect / disconnect
 // ---------------------------------------------------------------------------
 
-bool HamlibBackend::connectRadio()
+void HamlibBackend::connectRadio()
 {
+    Q_ASSERT(QThread::currentThread() == thread());
 #ifndef HAVE_HAMLIB
     emit error(tr("Hamlib support was not compiled in."));
-    return false;
 #else
     if (m_connected)
         disconnectRadio();
@@ -42,7 +63,7 @@ bool HamlibBackend::connectRadio()
     m_rig = rig_init(static_cast<rig_model_t>(model));
     if (!m_rig) {
         emit error(tr("rig_init failed for model %1. Check rig model number.").arg(model));
-        return false;
+        return;
     }
 
     // Short timeout so the poll never hangs the UI for long
@@ -59,7 +80,7 @@ bool HamlibBackend::connectRadio()
     if (!ok) {
         rig_cleanup(m_rig);
         m_rig = nullptr;
-        return false;
+        return;
     }
 
     const int ret = rig_open(m_rig);
@@ -67,20 +88,21 @@ bool HamlibBackend::connectRadio()
         emit error(tr("rig_open failed: %1").arg(QString::fromLatin1(rigerror(ret))));
         rig_cleanup(m_rig);
         m_rig = nullptr;
-        return false;
+        return;
     }
 
     m_connected  = true;
     m_lastFreqHz = 0.0;
     m_lastMode   = RIG_MODE_NONE;
+    m_consecutiveFailures = 0;
     m_pollTimer->start();
     emit connected();
-    return true;
 #endif
 }
 
 void HamlibBackend::disconnectRadio()
 {
+    Q_ASSERT(QThread::currentThread() == thread());
 #ifdef HAVE_HAMLIB
     m_pollTimer->stop();
     if (m_rig) {
@@ -107,6 +129,7 @@ bool HamlibBackend::isConnected() const
 
 void HamlibBackend::setFreq(double freqMhz)
 {
+    Q_ASSERT(QThread::currentThread() == thread());
 #ifdef HAVE_HAMLIB
     if (!m_connected || !m_rig) return;
     const freq_t hz = freqMhz * 1'000'000.0;
@@ -118,6 +141,7 @@ void HamlibBackend::setFreq(double freqMhz)
 
 void HamlibBackend::setMode(const QString &adifMode, const QString &submode)
 {
+    Q_ASSERT(QThread::currentThread() == thread());
 #ifdef HAVE_HAMLIB
     if (!m_connected || !m_rig) return;
     const rmode_t mode  = adifToRigMode(adifMode, submode);
@@ -137,9 +161,25 @@ void HamlibBackend::poll()
 {
 #ifdef HAVE_HAMLIB
     if (!m_connected || !m_rig) return;
-    readFreq();
-    readMode();
-    readPtt();
+
+    const bool freqOk = readFreq();
+    const bool modeOk = readMode();
+    const bool pttOk  = readPtt();
+
+    if (freqOk || modeOk || pttOk) {
+        m_consecutiveFailures = 0;
+        return;
+    }
+
+    // All three reads failed — the rig is gone (powered off, unplugged,
+    // network link down). Rather than silently retrying forever with
+    // m_connected stuck true and the UI showing a stale "Connected" state,
+    // give up after a few ticks and surface it.
+    static constexpr int kMaxConsecutiveFailures = 3;
+    if (++m_consecutiveFailures >= kMaxConsecutiveFailures) {
+        emit error(tr("Rig is not responding; disconnecting."));
+        disconnectRadio();
+    }
 #endif
 }
 
@@ -199,24 +239,25 @@ bool HamlibBackend::configureNetwork()
     return true;
 }
 
-void HamlibBackend::readFreq()
+bool HamlibBackend::readFreq()
 {
     freq_t hz = 0;
     if (rig_get_freq(m_rig, RIG_VFO_CURR, &hz) != RIG_OK)
-        return;
+        return false;
 
     if (hz != m_lastFreqHz) {
         m_lastFreqHz = hz;
         emit freqChanged(hz / 1'000'000.0);
     }
+    return true;
 }
 
-void HamlibBackend::readMode()
+bool HamlibBackend::readMode()
 {
     rmode_t  mode  = RIG_MODE_NONE;
     pbwidth_t width = 0;
     if (rig_get_mode(m_rig, RIG_VFO_CURR, &mode, &width) != RIG_OK)
-        return;
+        return false;
 
     if (mode != m_lastMode) {
         m_lastMode = mode;
@@ -224,18 +265,20 @@ void HamlibBackend::readMode()
         const QString adif = rigModeToAdif(mode, submode);
         emit modeChanged(adif, submode);
     }
+    return true;
 }
 
-void HamlibBackend::readPtt()
+bool HamlibBackend::readPtt()
 {
     ptt_t ptt = RIG_PTT_OFF;
     if (rig_get_ptt(m_rig, RIG_VFO_CURR, &ptt) != RIG_OK)
-        return;
+        return false;
     const bool tx = (ptt != RIG_PTT_OFF);
     if (tx != m_lastPtt) {
         m_lastPtt = tx;
         emit transmitChanged(tx);
     }
+    return true;
 }
 
 // static
