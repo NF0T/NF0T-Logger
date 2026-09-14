@@ -8,30 +8,26 @@
 
 #include "RadioBackend.h"
 
-#ifdef HAVE_HAMLIB
-#include <hamlib/rig.h>
-#endif
+class HamlibWorker;
 
-class QTimer;
-
-/// Hamlib CAT radio backend.
+/// Hamlib CAT radio backend — UI-thread facade.
 ///
-/// Polls the connected rig every 500 ms for frequency and mode changes,
-/// emitting freqChanged() / modeChanged() signals consumed by QsoEntryPanel.
+/// Every slot here is a plain virtual call: MainWindow parents this object
+/// normally and invokes connectRadio()/disconnectRadio()/setFreq()/setMode()
+/// directly, exactly like TciBackend. All blocking Hamlib I/O (rig_open,
+/// rig_close, the 500ms poll, setFreq/setMode) happens on HamlibWorker,
+/// which lives on m_workerThread; each slot here hands off to it via a
+/// queued QMetaObject::invokeMethod() call, and the worker's signals are
+/// relayed back out through this object's own RadioBackend signals.
 ///
-/// When HAVE_HAMLIB is not defined the class still compiles; connectRadio()
-/// always returns false and emits an error() signal.
-///
-/// The whole object lives on its own QThread (m_thread) so a slow or hung
-/// Hamlib call never stalls the UI. It therefore cannot take a QObject
-/// parent — moveToThread() refuses to move a parented object — so it has no
-/// parent constructor parameter and MainWindow owns/deletes it explicitly.
+/// When HAVE_HAMLIB is not defined, HamlibWorker still compiles;
+/// connectRadio() always ends in an error() signal.
 class HamlibBackend : public RadioBackend
 {
     Q_OBJECT
 
 public:
-    explicit HamlibBackend();
+    explicit HamlibBackend(QObject *parent = nullptr);
     ~HamlibBackend() override;
 
     QString displayName() const override { return QStringLiteral("Hamlib"); }
@@ -43,29 +39,8 @@ public slots:
     void setFreq(double freqMhz) override;
     void setMode(const QString &adifMode, const QString &submode = {}) override;
 
-private slots:
-    void poll();
-
 private:
-#ifdef HAVE_HAMLIB
-    bool configureSerial();
-    bool configureNetwork();
-    bool readFreq();
-    bool readMode();
-
-    static QString rigModeToAdif(rmode_t mode, QString &submode);
-    static rmode_t adifToRigMode(const QString &adifMode, const QString &submode);
-
-    bool readPtt();
-
-    RIG    *m_rig        = nullptr;
-    rmode_t m_lastMode   = RIG_MODE_NONE;
-    bool    m_lastPtt    = false;
-    int     m_consecutiveFailures = 0;
-#endif
-
-    QTimer *m_pollTimer  = nullptr;
-    QThread m_thread;
-    std::atomic<bool> m_connected{false};
-    double  m_lastFreqHz = 0.0;
+    QThread            m_workerThread;
+    HamlibWorker      *m_worker = nullptr;
+    std::atomic<bool>  m_connected{false};
 };
