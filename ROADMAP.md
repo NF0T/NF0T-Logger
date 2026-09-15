@@ -221,6 +221,54 @@ A user-configured custom SQLite path was silently ignored in favor of the defaul
 
 ---
 
+## v26.XX.N — Quick Entry Panel Field Ordering
+
+Field feedback from extended field use: the tab order and visual layout of `QsoQuickEntryPanel` need to match actual operating sequence.
+
+### Default focus
+
+Callsign already receives focus on `clearForm()`, `resetForm()`, and after `onLogClicked()` logs a contact ([QsoQuickEntryPanel.cpp](src/ui/entrypanel/QsoQuickEntryPanel.cpp)). This is the correct behavior and must be preserved — call it out explicitly here so it isn't lost incidentally while reordering the rest of the tab chain.
+
+### New tab order
+
+Callsign → RST Sent → RST Received → Comment → Band → Freq → Mode → Submode → Log button.
+
+This changes two things from the current chain (`setTabOrder()` calls, currently `callsign → rstSent → rstRcvd → band → freq → mode → comment → logBtn`):
+
+- **Comment moves up**, immediately after RST Received, instead of after Mode
+- **Submode joins the tab chain** — it currently isn't wired into `setTabOrder()` at all despite being a populated field (`m_submode`, populated by `onModeChanged()`)
+
+### Visual (left-to-right) order
+
+Band, Freq, Mode, Submode — left to right, matching the suggested tab order for that trailing group. Row 2's current layout (`row2->addWidget(...)`) already places them in roughly this order; verify Submode is visually present in that row (it's currently constructed but not added to any layout) and lands after Mode.
+
+---
+
+## v26.XX.N — Live Clock Time Entry
+
+Replaces the static "time + Now button" entry with a continuously running clock, so the operator doesn't need to remember to press Now before logging.
+
+### Behavior
+
+- `m_dateTime` ticks forward once per second (UTC) while unlocked, driven by a 1s `QTimer`, instead of only updating when the **Now** button is clicked
+- A padlock-style toggle button replaces (or augments) the current **Now** button:
+  - **Unlocked / live** — the clock keeps ticking; the field is read-only while live, since a live-updating value can't be hand-edited
+  - **Locked** — clicking the padlock freezes the displayed time and makes the field editable, for manual entry (e.g. logging a contact after the fact)
+  - The icon changes color/state between the two (e.g. open vs. closed padlock) so the current mode is visible at a glance
+- Clicking the padlock again while locked resyncs to the current time and resumes ticking
+
+### Recording time on log
+
+`buildQso()` already reads `m_dateTime->dateTime()` at the moment `onLogClicked()` executes ([QsoQuickEntryPanel.cpp:607](src/ui/entrypanel/QsoQuickEntryPanel.cpp)), not at some earlier snapshot — this is the desired semantics and doesn't need to change. What needs to change is *what* `m_dateTime` holds at that moment: currently a static value last set by clearForm() or a Now click; going forward, the live-ticking current time whenever unlocked, or the manually-locked value otherwise.
+
+### Notes
+
+- `clearForm()` currently sets `m_dateTime` to `QDateTime::currentDateTimeUtc()` once (a static snapshot); it should instead reset the panel to the unlocked/live state so the clock resumes ticking for the next entry
+- `onNowClicked()` / `m_nowBtn` are superseded by the lock toggle's unlock action, which has the same resync-to-now effect
+- Files: [QsoQuickEntryPanel.h](src/ui/entrypanel/QsoQuickEntryPanel.h), [QsoQuickEntryPanel.cpp](src/ui/entrypanel/QsoQuickEntryPanel.cpp)
+
+---
+
 ## Future / under consideration
 
 These are ideas that have been discussed but not yet scoped:
