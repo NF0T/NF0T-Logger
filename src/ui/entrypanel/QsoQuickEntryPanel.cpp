@@ -48,10 +48,13 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     m_dateTime->setFixedWidth(168);
     m_dateTime->setToolTip(tr("QSO start time (UTC)"));
 
-    m_nowBtn = new QPushButton(tr("Now"), this);
-    m_nowBtn->setFixedWidth(42);
-    m_nowBtn->setToolTip(tr("Set to current UTC time"));
-    connect(m_nowBtn, &QPushButton::clicked, this, &QsoQuickEntryPanel::onNowClicked);
+    m_lockBtn = new QPushButton(this);
+    m_lockBtn->setFixedWidth(30);
+    connect(m_lockBtn, &QPushButton::clicked, this, &QsoQuickEntryPanel::onLockClicked);
+
+    m_clockTimer = new QTimer(this);
+    m_clockTimer->setInterval(1000);
+    connect(m_clockTimer, &QTimer::timeout, this, &QsoQuickEntryPanel::onClockTick);
 
     m_callsign = new QLineEdit(this);
     m_callsign->setPlaceholderText(tr("Callsign"));
@@ -149,7 +152,7 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     auto *row1 = new QHBoxLayout;
     row1->addWidget(new QLabel(tr("UTC:"), this));
     row1->addWidget(m_dateTime);
-    row1->addWidget(m_nowBtn);
+    row1->addWidget(m_lockBtn);
     row1->addWidget(makeSep());
     row1->addWidget(new QLabel(tr("Call:"), this));
     row1->addWidget(m_callsign);
@@ -476,7 +479,7 @@ void QsoQuickEntryPanel::clearForm()
 {
     clearLookupPanel();
 
-    m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
+    setClockLive(true);
     m_callsign->clear();
     m_rstSent->clear();
     m_rstRcvd->clear();
@@ -489,9 +492,31 @@ void QsoQuickEntryPanel::clearForm()
     m_callsign->setFocus();
 }
 
-void QsoQuickEntryPanel::onNowClicked()
+void QsoQuickEntryPanel::setClockLive(bool live)
+{
+    m_clockLive = live;
+    m_dateTime->setReadOnly(live);
+
+    if (live) {
+        m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
+        m_clockTimer->start();
+        m_lockBtn->setText(QStringLiteral("\U0001F513"));   // 🔓
+        m_lockBtn->setToolTip(tr("Live — click to lock and edit manually"));
+    } else {
+        m_clockTimer->stop();
+        m_lockBtn->setText(QStringLiteral("\U0001F512"));   // 🔒
+        m_lockBtn->setToolTip(tr("Locked — click to resume live clock"));
+    }
+}
+
+void QsoQuickEntryPanel::onClockTick()
 {
     m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
+}
+
+void QsoQuickEntryPanel::onLockClicked()
+{
+    setClockLive(!m_clockLive);
 }
 
 void QsoQuickEntryPanel::onModeChanged(int /*index*/)

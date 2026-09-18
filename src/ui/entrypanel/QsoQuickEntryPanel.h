@@ -15,6 +15,7 @@ class QListWidget;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QPushButton;
+class QTimer;
 
 /// Two-column quick QSO entry panel.
 ///
@@ -67,7 +68,8 @@ private slots:
     void onFreqChanged(double freqMhz);
     void onBandChanged(int index);
     void onLogClicked();
-    void onNowClicked();
+    void onClockTick();
+    void onLockClicked();
 
 private:
     Qso  buildQso() const;
@@ -76,10 +78,11 @@ private:
     void updateRstDefaults();
     void setFreqSilently(double freqMhz);
     void setBandSilently(const QString &band);
+    void setClockLive(bool live);
 
     // Left column — entry fields
     QDateTimeEdit  *m_dateTime     = nullptr;
-    QPushButton    *m_nowBtn       = nullptr;
+    QPushButton    *m_lockBtn      = nullptr;
     QLineEdit      *m_callsign     = nullptr;
     QComboBox      *m_band         = nullptr;
     QDoubleSpinBox *m_freq         = nullptr;
@@ -102,6 +105,11 @@ private:
 
     QNetworkAccessManager *m_nam         = nullptr;
     QNetworkReply         *m_imageReply  = nullptr;
+
+    // UTC clock: ticks m_dateTime once per second while live; the lock
+    // toggle freezes it (editable) for manual back-entry.
+    QTimer *m_clockTimer = nullptr;
+    bool    m_clockLive  = true;
 
     // Two-layer data model for derived (non-widget) QSO fields:
     //   m_lookupQso  — base layer populated by the callsign lookup service
