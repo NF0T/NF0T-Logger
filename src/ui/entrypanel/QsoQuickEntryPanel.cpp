@@ -190,11 +190,12 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
 
     setTabOrder(m_callsign, m_rstSent);
     setTabOrder(m_rstSent,  m_rstRcvd);
-    setTabOrder(m_rstRcvd,  m_band);
+    setTabOrder(m_rstRcvd,  m_comment);
+    setTabOrder(m_comment,  m_band);
     setTabOrder(m_band,     m_freq);
     setTabOrder(m_freq,     m_mode);
-    setTabOrder(m_mode,     m_comment);
-    setTabOrder(m_comment,  m_logBtn);
+    setTabOrder(m_mode,     m_submode);
+    setTabOrder(m_submode,  m_logBtn);
 
     // -----------------------------------------------------------------------
     // Right column — context panel (lookup + previous QSOs)
