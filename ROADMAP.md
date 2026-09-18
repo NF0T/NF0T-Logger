@@ -221,7 +221,7 @@ A user-configured custom SQLite path was silently ignored in favor of the defaul
 
 ---
 
-## v26.XX.N — Quick Entry Panel Field Ordering
+## v26.XX.N — Quick Entry Panel Field Ordering ✓ shipped
 
 Field feedback from extended field use: the tab order and visual layout of `QsoQuickEntryPanel` need to match actual operating sequence.
 
@@ -244,7 +244,7 @@ Band, Freq, Mode, Submode — left to right, matching the suggested tab order fo
 
 ---
 
-## v26.XX.N — Live Clock Time Entry
+## v26.XX.N — Live Clock Time Entry ✓ shipped
 
 Replaces the static "time + Now button" entry with a continuously running clock, so the operator doesn't need to remember to press Now before logging.
 
