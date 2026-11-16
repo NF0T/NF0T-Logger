@@ -45,14 +45,31 @@ The test infrastructure (`tests/`, `enable_testing()` / `add_subdirectory(tests)
 
 Pin current behaviour before anything moves. Qt Test, compiling the `src/` files directly as `test_tci` does today.
 
-- [ ] `Callsign`: validation, prefix/base/suffix parsing, portable designators, DXCC/zone resolution for a table of known calls
-- [ ] `Maidenhead`: grid ↔ lat/lon for 4- and 6-character grids; haversine distance against known pairs
-- [ ] `BandPlan`: frequency → band at band edges and outside any band
-- [ ] ADIF: parse → write → parse round trip is lossless across every populated `Qso` field, including the `APP_NF0T_*` fields; length-based tokenising with multibyte UTF-8 values
-- [ ] `SqliteBackend`: `initSchema()` on an empty temp file runs every migration; insert → fetch round trip; duplicate `callsign + datetime_on` is rejected, not thrown
-- [ ] `CtyDatLookupProvider`: a small fixture `cty.dat` covering `=CALL` exact matches, longest-prefix-wins and zone overrides
+- [x] `Callsign`: validation, prefix/base/suffix parsing, portable designators (`tests/test_callsign.cpp`). DXCC/zone resolution lives in the CTY.dat provider and is tested there.
+- [x] `Maidenhead`: grid ↔ lat/lon for 2-, 4- and 6-character grids; haversine distance properties (`tests/test_maidenhead.cpp`)
+- [x] `BandPlan`: frequency → band at band edges and outside any band; mode table (`tests/test_bandplan.cpp`)
+- [x] ADIF: write → parse round trip across every populated `Qso` field, including the `APP_NF0T_*` fields, as a string and through a file; length-based tokenising; multibyte UTF-8 values (`tests/test_adif.cpp`)
+- [x] `SqliteBackend`: `initSchema()` runs every migration, including v2 against a rebuilt v1 database; insert → fetch round trip; a duplicate `callsign + datetime_on + band + mode` is rejected, not thrown; update, delete, clear, transactions, filters, paging (`tests/test_sqlite_backend.cpp`)
+- [x] `CtyDatLookupProvider`: a generated fixture `cty.dat` covering `=CALL` exact matches, longest-prefix-wins, zone/continent/lat-lon overrides and the 100-entity load threshold (`tests/test_ctydat.cpp`)
 
-Gate: tests pass on Linux and Windows CI.
+Every suite was mutation-checked: breaking the code under test fails it.
+
+Gate: tests pass on Linux, Windows and macOS CI.
+
+#### Defects found by A1 (recorded, not fixed)
+
+A1 makes no production changes. These are pinned with `QEXPECT_FAIL` or a "current behaviour" test and should be fixed in their own PRs before A3. Fixing a `QEXPECT_FAIL` one turns it into an XPASS, which fails the test until the marker is removed.
+
+- **ADIF headerless files lose their first record.** `AdifParser` only collects fields after `<EOH>` or the first `<EOR>`, contrary to its own comment. This includes `AdifWriter`'s own `includeHeader = false` output. `QrzService` parses the QRZ fetch response with the same parser; if that response has no header, the first confirmation of every download is dropped (unverified: needs a live QRZ response).
+- **ADIF Sweepstakes check overwrites the ARRL section.** `arrlCheck` is written as a second `ARRL_SECT` (ADIF's field is `CHECK`) and read back from `ARRL_SECT`, so on re-import the check replaces the section.
+- **A QSO with no station callsign cannot be stored.** `station_callsign` is bound without the empty-to-NULL helper, so a null `QString` violates `NOT NULL`. Every logging path fills it from Settings, so this bites only when no station callsign is configured.
+- Behaviour worth a decision rather than a fix, pinned as-is:
+  - an exact `=CALL` match on the base call beats an outer prefix (`VE3/W1AW` resolves to W1AW's entity);
+  - a call-shaped prefix such as `VP2E/W1AW` is not recognised as a prefix;
+  - `54.000` MHz maps to 6m, so 5m's default frequency maps back to 6m;
+  - ADIF field lengths are UTF-16 code units, so a file whose lengths count UTF-8 bytes is misread.
+
+For A3: `AdifWriter.h` defaults `programVersion` to the app's `APP_VERSION` compile definition. The library will need that value supplied by the app instead.
 
 ### A2. Decouple the lookup providers and the table model (behaviour-neutral)
 
@@ -95,7 +112,7 @@ Gate: A1 tests still pass; manual check that QRZ lookup and CTY.dat enrichment b
 - [ ] `src/CMakeLists.txt`: drop the moved files from `SOURCES`/`HEADERS`; `target_link_libraries(NF0T-Logger PRIVATE nf0t-core …)`.
 - [ ] Top-level `CMakeLists.txt`: `add_subdirectory(libs/nf0t-core)` before `src`.
 - [ ] `tools/log4om-migrate`: stop compiling `SqlBackendBase.cpp`/`SqliteBackend.cpp` directly; link `nf0t-core`.
-- [ ] CI (`ci.yml`): add a `ctest --output-on-failure` step to each build job.
+- [x] CI (`ci.yml`): add a `ctest --output-on-failure` step to each build job. (Done in #34.)
 - [ ] Update the "Source layout" section of `CLAUDE.md` and the build notes in `README.md`/`CONTRIBUTING.md`.
 
 Gate: Linux, Windows and macOS CI green; the app binary behaves identically. Smoke list: ADIF import and export, callsign lookup (QRZ + CTY.dat), New Log, Migrate Database (SQLite ↔ MariaDB), log4om-migrate against a test DB.
