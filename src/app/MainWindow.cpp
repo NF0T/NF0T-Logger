@@ -985,6 +985,17 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
             m_entryPanel, &QsoQuickEntryPanel::setRadioMode);
     connect(backend, &RadioBackend::transmitChanged,
             m_radioPanel, &RadioPanel::setTransmitting);
+    connect(backend, &RadioBackend::txFreqChanged,
+            m_entryPanel, &QsoQuickEntryPanel::setRadioTxFreq);
+    connect(backend, &RadioBackend::splitChanged,
+            m_entryPanel, &QsoQuickEntryPanel::setRadioSplit);
+    connect(backend, &RadioBackend::spotClicked, this, [this](const QString &call, double freqMhz) {
+        m_entryPanel->setDxCall(call);
+        m_entryPanel->setRadioFreq(freqMhz);
+    });
+    connect(backend, &RadioBackend::deviceDiscovered, this, [this, backend](const QString &dev) {
+        showStatusMessage(tr("%1: %2 detected.").arg(backend->displayName(), dev), 4000);
+    });
 
     connect(backend, &RadioBackend::connected, this, [this, backend, indicator]() {
         setIndicatorState(indicator, IndicatorState::Connected);
