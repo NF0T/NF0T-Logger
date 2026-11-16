@@ -38,6 +38,13 @@ private slots:
 
 private:
     std::expected<qint64, QString> insert(Qso q) { return m_db->insertQso(q); }
+    // By value: ranging over *m_db->fetchQsos() would dangle, because the
+    // std::expected temporary dies before the loop body runs.
+    QList<Qso> fetch(const QsoFilter &f = {})
+    {
+        auto r = m_db->fetchQsos(f);
+        return r ? *r : QList<Qso>{};
+    }
     QList<int> schemaVersions();
     QString rawPath() const { return m_dir->filePath(QStringLiteral("log.db")); }
 
@@ -159,7 +166,7 @@ void TestSqliteBackend::v2MigrationNormalisesModes()
     QVERIFY(m_db->initSchema().has_value());
 
     QHash<QString, QPair<QString, QString>> got;
-    for (const Qso &q : *m_db->fetchQsos())
+    for (const Qso &q : fetch())
         got.insert(q.callsign, {q.mode, q.submode});
     QCOMPARE(got.value("A1"), qMakePair(QStringLiteral("PSK"),      QStringLiteral("PSK31")));
     QCOMPARE(got.value("A2"), qMakePair(QStringLiteral("MFSK"),     QStringLiteral("FT4")));
@@ -198,7 +205,7 @@ void TestSqliteBackend::emptyValuesRoundTripAsDefaults()
     const Qso in = make(QStringLiteral("W1AW"), at(1, 0));
     QVERIFY(insert(in).has_value());
 
-    const Qso out = m_db->fetchQsos()->first();
+    const Qso out = fetch().value(0);
     COMPARE_QSO(out, in, 0.0);
 
     QSqlDatabase raw = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("nulls"));
@@ -249,7 +256,7 @@ void TestSqliteBackend::missingStationCallsign()
     Qso empty = make(QStringLiteral("W1AW"), at(1, 0));
     empty.stationCallsign = QStringLiteral("");
     QVERIFY(insert(empty).has_value());
-    QVERIFY(m_db->fetchQsos()->first().stationCallsign.isEmpty());
+    QVERIFY(fetch().value(0).stationCallsign.isEmpty());
 }
 
 void TestSqliteBackend::updateDeleteClear()
@@ -264,7 +271,7 @@ void TestSqliteBackend::updateDeleteClear()
     QVERIFY(m_db->updateQso(a).has_value());
     QsoFilter byCall;
     byCall.exactCall = QStringLiteral("W1AW");
-    const Qso updated = m_db->fetchQsos(byCall)->first();
+    const Qso updated = fetch(byCall).value(0);
     QCOMPARE(updated.id, a.id);
     QCOMPARE(updated.name, QStringLiteral("Hiram"));
     QCOMPARE(updated.lotwQslSent, QChar('Y'));
@@ -302,7 +309,7 @@ void TestSqliteBackend::filters()
 
     auto calls = [this](const QsoFilter &f) {
         QStringList out;
-        for (const Qso &q : *m_db->fetchQsos(f)) out << q.callsign;
+        for (const Qso &q : fetch(f)) out << q.callsign;
         out.sort();
         return out;
     };
@@ -343,7 +350,7 @@ void TestSqliteBackend::orderingAndPaging()
 
     auto calls = [this](const QsoFilter &f) {
         QStringList out;
-        for (const Qso &q : *m_db->fetchQsos(f)) out << q.callsign;
+        for (const Qso &q : fetch(f)) out << q.callsign;
         return out;
     };
 
