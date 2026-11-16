@@ -40,6 +40,12 @@ cmake -B build-mac -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-mac --parallel
 ```
 
+### Tests
+Qt Test executables live in `tests/` and run in CI on all three platforms:
+```bash
+ctest --test-dir build --output-on-failure
+```
+
 ## Source layout
 
 ```
@@ -128,7 +134,7 @@ tools/
 
 ## Known issues / tabled work
 
-- **TCI TX indicator** — AetherSDR does not emit the `TRX:{trx},{state}` command on PTT. Logger code is correct; waiting on AetherSDR side.
+- **TCI focus vs. TX slice** — the logger logs against the focused TRX (`active_slice` / `ECODER_SWITCH_RX`). AetherSDR reports split on TRX 0 whenever TX is on another slice, so split FREQ/FREQ_RX is only recorded while slice A is focused. Focusing slice B while TX stays on A logs B's frequency.
 - **WSJT-X multicast** — interface selector added to settings. If WSJT-X is bound to loopback, check the loopback interface in Settings → WSJT-X.
 - **Serial port default** — Settings defaults to `/dev/ttyUSB0` on all platforms. On Windows use `COM1` etc.; on macOS `/dev/cu.usbserial-*`.
 - **tQSL path placeholder** — Settings page shows `/usr/bin/tqsl`; adjust for Windows/macOS.

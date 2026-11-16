@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #include "QsoQuickEntryPanel.h"
 
+#include <cmath>
+
 #include <QComboBox>
 #include <QDateTimeEdit>
 #include <QDialog>
@@ -288,10 +290,21 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
 
 void QsoQuickEntryPanel::setRadioFreq(double freqMhz)
 {
+    m_radioRxFreq = freqMhz;
     setFreqSilently(freqMhz);
     const QString band = BandPlan::freqToBand(freqMhz);
     if (!band.isEmpty())
         setBandSilently(band);
+}
+
+void QsoQuickEntryPanel::setRadioTxFreq(double freqMhz)
+{
+    m_radioTxFreq = freqMhz;
+}
+
+void QsoQuickEntryPanel::setRadioSplit(bool split)
+{
+    m_radioSplit = split;
 }
 
 void QsoQuickEntryPanel::setRadioMode(const QString &mode, const QString &submode)
@@ -639,6 +652,21 @@ Qso QsoQuickEntryPanel::buildQso() const
     q.rstSent    = m_rstSent->text().trimmed();
     q.rstRcvd    = m_rstRcvd->text().trimmed();
     q.comment    = m_comment->text().trimmed();
+
+    // Split: ADIF FREQ is the TX frequency and FREQ_RX the receive one. Only
+    // when the field still shows the radio's RX frequency (to 1 Hz) — a
+    // hand-entered frequency is the operator's, not the radio's.
+    constexpr double kOneHzMhz = 1e-6;
+    if (m_radioSplit && m_radioTxFreq > 0.0 && m_radioRxFreq > 0.0
+        && std::abs(q.freq - m_radioRxFreq) < kOneHzMhz
+        && std::abs(m_radioTxFreq - m_radioRxFreq) >= kOneHzMhz) {
+        q.freqRx = q.freq;
+        q.freq   = m_radioTxFreq;
+        q.bandRx = q.band;
+        const QString txBand = BandPlan::freqToBand(m_radioTxFreq);
+        if (!txBand.isEmpty()) q.band = txBand;
+    }
+
     enrichQso(q);
     return q;
 }

@@ -40,6 +40,10 @@ signals:
     void freqChanged(double freqMhz);
     void modeChanged(const QString &mode, const QString &submode);
     void transmitChanged(bool transmitting);
+    void txFreqChanged(double freqMhz);
+    void splitChanged(bool splitActive);
+    void spotClicked(const QString &callsign, double freqMhz);
+    void deviceDiscovered(const QString &deviceName);
     void connected();
     void disconnected();
     void error(const QString &message);
