@@ -59,6 +59,9 @@ endif()
 add_subdirectory(src)
 add_subdirectory(tools/log4om-migrate)
 
+enable_testing()
+add_subdirectory(tests)
+
 # ── Packaging ────────────────────────────────────────────────────────────────
 set(CPACK_PACKAGE_NAME              "NF0T-Logger")
 set(CPACK_PACKAGE_VENDOR            "Ryan Butler (NF0T)")

@@ -32,6 +32,8 @@ public:
     explicit QsoQuickEntryPanel(QWidget *parent = nullptr);
 
     void setRadioFreq(double freqMhz);
+    void setRadioTxFreq(double freqMhz);
+    void setRadioSplit(bool split);
     void setRadioMode(const QString &mode, const QString &submode = {});
     void setDxCall(const QString &call);
     void setDxGrid(const QString &grid);
@@ -119,4 +121,7 @@ private:
     Qso m_stationQso;
 
     bool m_suppressBandFreqSignals = false;
+    double m_radioRxFreq = 0.0;
+    double m_radioTxFreq = 0.0;
+    bool   m_radioSplit  = false;
 };
