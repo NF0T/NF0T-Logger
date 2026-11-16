@@ -269,6 +269,33 @@ Replaces the static "time + Now button" entry with a continuously running clock,
 
 ---
 
+## v26.XX.N — nf0t-core Shared Library
+
+Extract NF0T Logger's application-independent code into **`nf0t-core`**, a static library in its own repository (`NF0T/nf0t-core`, GPL-3.0) consumed as a git submodule. The second consumer is a planned standalone companion app for the 3905 Century Club nets and awards; sharing the core keeps ADIF, callsign handling and the database layer maintained in one place instead of copied.
+
+This is a refactor: **no user-visible change, no schema change, no settings change** to NF0T Logger.
+
+### What moves
+
+- `Qso` value type and `QsoFilter`
+- ADIF parser and writer (including the `APP_NF0T_*` fields)
+- `Callsign`, `Maidenhead`, `BandPlan`
+- `DatabaseInterface`, `SqlBackendBase`, SQLite and MariaDB backends
+- Callsign lookup interface plus the CTY.dat and QRZ XML providers
+
+QSL services, radio backends, WSJT-X, settings and all UI stay in the app. `QsoTableModel` is presentation, so it stays too, relocated to `src/ui/`.
+
+### Approach
+
+1. **Characterization tests** for everything that moves, so behaviour is pinned before anything is touched. Builds on the test infrastructure from the TCI 2.1 work.
+2. **Decouple** the lookup providers from `Settings::instance()` / `SecureSettings` through injected, pull-based configuration. `MainWindow::wireCallsignLookup()` supplies it, and it is the only call site.
+3. **Carve in place** as a `libs/nf0t-core/` library target whose CMake cannot see `src/`. The compiler proves there is no hidden coupling. Include paths are unchanged (`core/…`, `database/…`, `lookup/…`), and `log4om-migrate` links the library instead of compiling database sources directly. Ship this in a normal release.
+4. **Split** `libs/nf0t-core/` with its history into its own repo and re-add it as a submodule at the same path. CI checkouts gain `submodules: recursive`.
+
+Full step-by-step plan, gates and open questions: [docs/nf0t-core-plan.md](docs/nf0t-core-plan.md).
+
+---
+
 ## Future / under consideration
 
 These are ideas that have been discussed but not yet scoped:
