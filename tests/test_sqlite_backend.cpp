@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include <QScopeGuard>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QTemporaryDir>
@@ -123,7 +124,7 @@ void TestSqliteBackend::initSchemaAppliesEveryMigration()
 {
     QVERIFY(m_db->isOpen());
     QCOMPARE(schemaVersions(), (QList<int>{1, 2}));
-    QCOMPARE(*m_db->qsoCount(), 0);
+    QCOMPARE(m_db->qsoCount().value(), 0);
 }
 
 void TestSqliteBackend::initSchemaIsIdempotent()
@@ -135,7 +136,10 @@ void TestSqliteBackend::initSchemaIsIdempotent()
 
 void TestSqliteBackend::v2MigrationNormalisesModes()
 {
-    // Rebuild the state of a v1 database holding pre-v2 mode names.
+    // Rebuild the state of a v1 database holding pre-v2 mode names. The guard
+    // drops the connection on every return path, so a failed check here
+    // cannot leave log.db locked for cleanup().
+    const auto dropV1 = qScopeGuard([] { QSqlDatabase::removeDatabase(QStringLiteral("v1")); });
     {
         QSqlDatabase raw = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("v1"));
         raw.setDatabaseName(rawPath());
@@ -161,7 +165,6 @@ void TestSqliteBackend::v2MigrationNormalisesModes()
         }
         raw.close();
     }
-    QSqlDatabase::removeDatabase(QStringLiteral("v1"));
 
     QVERIFY(m_db->initSchema().has_value());
 
@@ -208,6 +211,7 @@ void TestSqliteBackend::emptyValuesRoundTripAsDefaults()
     const Qso out = fetch().value(0);
     COMPARE_QSO(out, in, 0.0);
 
+    const auto dropNulls = qScopeGuard([] { QSqlDatabase::removeDatabase(QStringLiteral("nulls")); });
     QSqlDatabase raw = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("nulls"));
     raw.setDatabaseName(rawPath());
     QVERIFY(raw.open());
@@ -221,8 +225,6 @@ void TestSqliteBackend::emptyValuesRoundTripAsDefaults()
         QCOMPARE(q.value(3).toString(), QStringLiteral("N"));
     }
     raw.close();
-    raw = QSqlDatabase();
-    QSqlDatabase::removeDatabase(QStringLiteral("nulls"));
 }
 
 void TestSqliteBackend::duplicateIsRejectedNotThrown()
@@ -233,12 +235,12 @@ void TestSqliteBackend::duplicateIsRejectedNotThrown()
     const auto dup = insert(make(QStringLiteral("W1AW"), at(1, 0)));
     QVERIFY(!dup.has_value());
     QVERIFY(!dup.error().isEmpty());
-    QCOMPARE(*m_db->qsoCount(), 1);
+    QCOMPARE(m_db->qsoCount().value(), 1);
 
     QVERIFY(insert(make(QStringLiteral("W1AW"), at(1, 0), QStringLiteral("40m"))).has_value());
     QVERIFY(insert(make(QStringLiteral("W1AW"), at(1, 0), QStringLiteral("20m"), QStringLiteral("CW"))).has_value());
     QVERIFY(insert(make(QStringLiteral("W1AW"), at(1, 1))).has_value());
-    QCOMPARE(*m_db->qsoCount(), 4);
+    QCOMPARE(m_db->qsoCount().value(), 4);
 }
 
 void TestSqliteBackend::missingStationCallsign()
@@ -277,11 +279,11 @@ void TestSqliteBackend::updateDeleteClear()
     QCOMPARE(updated.lotwQslSent, QChar('Y'));
 
     QVERIFY(m_db->deleteQso(a.id).has_value());
-    QCOMPARE(*m_db->qsoCount(), 1);
+    QCOMPARE(m_db->qsoCount().value(), 1);
     QVERIFY(m_db->deleteQso(999999).has_value());   // missing id is not an error
 
     QVERIFY(m_db->clearQsos().has_value());
-    QCOMPARE(*m_db->qsoCount(), 0);
+    QCOMPARE(m_db->qsoCount().value(), 0);
     QCOMPARE(schemaVersions(), (QList<int>{1, 2}));   // schema survives New Log
 }
 
@@ -290,12 +292,12 @@ void TestSqliteBackend::transactionRollback()
     QVERIFY(m_db->beginTransaction().has_value());
     QVERIFY(insert(make(QStringLiteral("W1AW"), at(1, 0))).has_value());
     QVERIFY(m_db->rollbackTransaction().has_value());
-    QCOMPARE(*m_db->qsoCount(), 0);
+    QCOMPARE(m_db->qsoCount().value(), 0);
 
     QVERIFY(m_db->beginTransaction().has_value());
     QVERIFY(insert(make(QStringLiteral("W1AW"), at(1, 0))).has_value());
     QVERIFY(m_db->commitTransaction().has_value());
-    QCOMPARE(*m_db->qsoCount(), 1);
+    QCOMPARE(m_db->qsoCount().value(), 1);
 }
 
 void TestSqliteBackend::filters()
@@ -317,7 +319,7 @@ void TestSqliteBackend::filters()
     QsoFilter f;
     f.call = QStringLiteral("1AW");
     QCOMPARE(calls(f), (QStringList{"W1AW", "W1AWX"}));
-    QCOMPARE(*m_db->countQsos(f), 2);
+    QCOMPARE(m_db->countQsos(f).value(), 2);
 
     f = {};
     f.exactCall = QStringLiteral("W1AW");
@@ -340,7 +342,7 @@ void TestSqliteBackend::filters()
     f = {};
     f.lotwUnsent = true;
     QCOMPARE(calls(f), (QStringList{"K1ABC"}));
-    QCOMPARE(*m_db->countQsos(f), 1);
+    QCOMPARE(m_db->countQsos(f).value(), 1);
 }
 
 void TestSqliteBackend::orderingAndPaging()

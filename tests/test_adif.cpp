@@ -283,6 +283,7 @@ void TestAdif::latLonFormat()
         "<LAT:11>N039 58.750<LON:11>W095 12.500<MY_LAT:3>bad<EOR>"));
     QCOMPARE(r.qsos.size(), 1);
     const Qso &q = r.qsos.first();
+    QVERIFY(q.lat.has_value() && q.lon.has_value());
     QVERIFY(std::abs(*q.lat - 39.9791666667) < 1e-9);
     QVERIFY(std::abs(*q.lon - -95.2083333333) < 1e-9);
     QVERIFY(!q.myLat.has_value());
