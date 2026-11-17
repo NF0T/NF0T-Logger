@@ -13,11 +13,6 @@ set(SOURCES
     app/settings/pages/DisplayPage.cpp
     app/settings/pages/CallsignLookupPage.cpp
     ui/QsoTableModel.cpp
-    core/adif/AdifParser.cpp
-    core/adif/AdifWriter.cpp
-    core/BandPlan.cpp
-    core/Callsign.cpp
-    core/Maidenhead.cpp
     ui/RadioPanel.cpp
     ui/entrypanel/QsoQuickEntryPanel.cpp
     ui/LogFilterBar.cpp
@@ -28,8 +23,6 @@ set(SOURCES
     ui/QslDownloadDialog.cpp
     ui/QslUploadDialog.cpp
     ui/MigrateDatabaseDialog.cpp
-    lookup/QrzXmlLookupProvider.cpp
-    lookup/CtyDatLookupProvider.cpp
     radio/HamlibBackend.cpp
     radio/HamlibWorker.cpp
     radio/TciBackend.cpp
@@ -38,9 +31,6 @@ set(SOURCES
     qsl/EqslService.cpp
     qsl/QrzService.cpp
     qsl/ClubLogService.cpp
-    database/SqlBackendBase.cpp
-    database/SqliteBackend.cpp
-    database/MariaDbBackend.cpp
 )
 
 set(HEADERS
@@ -57,14 +47,7 @@ set(HEADERS
     app/settings/pages/WsjtxPage.h
     app/settings/pages/DisplayPage.h
     app/settings/pages/CallsignLookupPage.h
-    core/logbook/Qso.h
-    core/logbook/QsoFilter.h
     ui/QsoTableModel.h
-    core/adif/AdifParser.h
-    core/adif/AdifWriter.h
-    core/BandPlan.h
-    core/Callsign.h
-    core/Maidenhead.h
     ui/RadioPanel.h
     ui/entrypanel/QsoQuickEntryPanel.h
     ui/LogFilterBar.h
@@ -75,10 +58,6 @@ set(HEADERS
     ui/QslDownloadDialog.h
     ui/QslUploadDialog.h
     ui/MigrateDatabaseDialog.h
-    lookup/CallsignLookupResult.h
-    lookup/CallsignLookupProvider.h
-    lookup/QrzXmlLookupProvider.h
-    lookup/CtyDatLookupProvider.h
     radio/DigitalListenerService.h
     radio/HamlibBackend.h
     radio/HamlibWorker.h
@@ -90,10 +69,6 @@ set(HEADERS
     qsl/EqslService.h
     qsl/QrzService.h
     qsl/ClubLogService.h
-    database/DatabaseInterface.h
-    database/SqlBackendBase.h
-    database/SqliteBackend.h
-    database/MariaDbBackend.h
 )
 
 qt_add_executable(NF0T-Logger
@@ -119,6 +94,7 @@ target_include_directories(NF0T-Logger PRIVATE
 )
 
 target_link_libraries(NF0T-Logger PRIVATE
+    nf0t-core
     Qt6::Core
     Qt6::Widgets
     Qt6::Network

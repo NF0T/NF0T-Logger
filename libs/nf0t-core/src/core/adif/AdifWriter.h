@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #pragma once
 
+#include <QCoreApplication>
 #include <QList>
 #include <QString>
 
@@ -9,8 +10,10 @@
 
 struct AdifWriterOptions {
     bool    includeHeader    = true;
-    QString programId        = QStringLiteral("NF0T Logger");
-    QString programVersion   = QStringLiteral(APP_VERSION);
+    // Identify the host application; read when the options are constructed,
+    // so set the application name and version before writing.
+    QString programId        = QCoreApplication::applicationName();
+    QString programVersion   = QCoreApplication::applicationVersion();
     bool    includeAppFields = true;   // write APP_NF0T_* extensions (QRZ, ClubLog)
 };
 

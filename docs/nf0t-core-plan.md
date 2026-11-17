@@ -69,7 +69,7 @@ A1 made no production changes; it pinned these with `QEXPECT_FAIL` or a "current
   - `54.000` MHz maps to 6m, so 5m's default frequency maps back to 6m;
   - ADIF field lengths are UTF-16 code units, so a file whose lengths count UTF-8 bytes is misread.
 
-For A3: `AdifWriter.h` defaults `programVersion` to the app's `APP_VERSION` compile definition. The library will need that value supplied by the app instead.
+For A3: `AdifWriter.h` defaulted `programVersion` to the app's `APP_VERSION` compile definition. Done in A3: `programId`/`programVersion` now default to `QCoreApplication::applicationName()`/`applicationVersion()`, which the app already sets, and the "… ADIF Export" header line follows `programId`.
 
 ### A2. Decouple the lookup providers and the table model (behaviour-neutral)
 
@@ -101,19 +101,20 @@ Gate: A1 tests still pass; manual check that QRZ lookup and CTY.dat enrichment b
 
 ### A3. Create the library target
 
-- [ ] `git mv` the "Move" rows above into `libs/nf0t-core/src/`, **keeping their relative paths** (`core/…`, `database/…`, `lookup/…`). Every existing `#include "core/…"` stays valid, so there is no include churn in the app.
-- [ ] `libs/nf0t-core/CMakeLists.txt`:
+- [x] `git mv` the "Move" rows above into `libs/nf0t-core/src/`, **keeping their relative paths** (`core/…`, `database/…`, `lookup/…`). Every existing `#include "core/…"` stays valid, so there is no include churn in the app.
+- [x] `libs/nf0t-core/CMakeLists.txt`:
   - `add_library(nf0t-core STATIC …)`, `target_include_directories(nf0t-core PUBLIC src)`
   - `target_link_libraries(nf0t-core PUBLIC Qt6::Core Qt6::Sql Qt6::Network)`
   - C++23, `CXX_EXTENSIONS OFF`, `AUTOMOC ON` set on the target, because a top-level `qt_standard_project_setup()` won't exist once it's a separate repo
   - Buildable standalone: `find_package(Qt6 …)` itself when it is the top-level project (`CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR`; `PROJECT_IS_TOP_LEVEL` needs CMake 3.21 and the repo's floor is 3.20)
   - **No include path to `../../src`.** This is the enforcement mechanism: any remaining app coupling is a compile error.
-- [ ] Move the A1 tests to `libs/nf0t-core/tests/` so they travel with the library in Phase B.
-- [ ] `src/CMakeLists.txt`: drop the moved files from `SOURCES`/`HEADERS`; `target_link_libraries(NF0T-Logger PRIVATE nf0t-core …)`.
-- [ ] Top-level `CMakeLists.txt`: `add_subdirectory(libs/nf0t-core)` before `src`.
-- [ ] `tools/log4om-migrate`: stop compiling `SqlBackendBase.cpp`/`SqliteBackend.cpp` directly; link `nf0t-core`.
+- [x] Move the A1 tests to `libs/nf0t-core/tests/` so they travel with the library in Phase B.
+- [x] `src/CMakeLists.txt`: drop the moved files from `SOURCES`/`HEADERS`; `target_link_libraries(NF0T-Logger PRIVATE nf0t-core …)`.
+- [x] Top-level `CMakeLists.txt`: `add_subdirectory(libs/nf0t-core)` before `src`, with `enable_testing()` moved ahead of every `add_subdirectory()`.
+- [x] `tools/log4om-migrate`: stop compiling `SqlBackendBase.cpp`/`SqliteBackend.cpp` directly; link `nf0t-core`.
 - [x] CI (`ci.yml`): add a `ctest --output-on-failure` step to each build job. (Done in #34.)
-- [ ] Update the "Source layout" section of `CLAUDE.md` and the build notes in `README.md`/`CONTRIBUTING.md`.
+- [x] Update the "Source layout" section of `CLAUDE.md` and the build notes in `README.md`/`CONTRIBUTING.md`. (README's build commands are unchanged; CONTRIBUTING gains a note on the library boundary. `.github/CODEOWNERS` paths updated.)
+- [x] Remove the last two app identities from library code: `AdifWriterOptions` defaults (above) and the QRZ `agent`, now `QrzXmlConfig::agent` (the app passes `NF0T-Logger`, unchanged).
 
 Gate: Linux, Windows and macOS CI green; the app binary behaves identically. Smoke list: ADIF import and export, callsign lookup (QRZ + CTY.dat), New Log, Migrate Database (SQLite ↔ MariaDB), log4om-migrate against a test DB.
 

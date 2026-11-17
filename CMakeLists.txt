@@ -56,10 +56,12 @@ else()
     message(STATUS "Hamlib not found — CAT control will be disabled")
 endif()
 
+# Before any add_subdirectory(), so tests in every directory register with ctest.
+enable_testing()
+
+add_subdirectory(libs/nf0t-core)
 add_subdirectory(src)
 add_subdirectory(tools/log4om-migrate)
-
-enable_testing()
 add_subdirectory(tests)
 
 # ── Packaging ────────────────────────────────────────────────────────────────

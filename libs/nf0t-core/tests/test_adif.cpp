@@ -25,6 +25,7 @@ private slots:
     void arrlCheckRoundTrip();
     void appFieldsCanBeExcluded();
     void headerContents();
+    void headerDefaultsToApplicationIdentity();
 
     // Parser
     void lengthBasedTokenising();
@@ -155,8 +156,23 @@ void TestAdif::headerContents()
     QVERIFY(text.contains(QStringLiteral("<CREATED_TIMESTAMP:15>")));
     QVERIFY(text.contains(QStringLiteral("<EOH>")));
     QVERIFY(!text.contains(QStringLiteral("<EOR>")));
+    QVERIFY(text.startsWith(QStringLiteral("TestProg ADIF Export\n")));
+}
 
-    QCOMPARE(AdifWriterOptions().programVersion, QStringLiteral(APP_VERSION));
+void TestAdif::headerDefaultsToApplicationIdentity()
+{
+    // The library has no version of its own to report: the host application's
+    // name and version, as set on QCoreApplication, are the defaults.
+    QCoreApplication::setApplicationName(QStringLiteral("Host App"));
+    QCoreApplication::setApplicationVersion(QStringLiteral("26.1.0"));
+    const AdifWriter::Options opts;
+    QCOMPARE(opts.programId, QStringLiteral("Host App"));
+    QCOMPARE(opts.programVersion, QStringLiteral("26.1.0"));
+
+    const QString text = AdifWriter::writeString({}, opts);
+    QVERIFY(text.startsWith(QStringLiteral("Host App ADIF Export\n")));
+    QVERIFY(text.contains(QStringLiteral("<PROGRAMID:8>Host App")));
+    QVERIFY(text.contains(QStringLiteral("<PROGRAMVERSION:6>26.1.0")));
 }
 
 // --- Parser ------------------------------------------------------------------

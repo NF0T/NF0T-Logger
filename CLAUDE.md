@@ -41,7 +41,7 @@ cmake --build build-mac --parallel
 ```
 
 ### Tests
-Qt Test executables live in `tests/` and run in CI on all three platforms:
+Qt Test executables live in `libs/nf0t-core/tests/` (library) and `tests/` (app), and run in CI on all three platforms:
 ```bash
 ctest --test-dir build --output-on-failure
 ```
@@ -49,6 +49,33 @@ ctest --test-dir build --output-on-failure
 ## Source layout
 
 ```
+libs/nf0t-core/                # Static library shared with other NF0T apps; builds standalone.
+  CMakeLists.txt               # No include path to src/: app coupling is a compile error
+  tests/                       # Library unit tests (Qt Test, registered with ctest)
+  src/
+    core/
+      logbook/
+        Qso.h                    # Central data struct (~160 fields, plain value type)
+        QsoFilter.h/.cpp         # Query/filter helpers
+      adif/
+        AdifParser.h/.cpp        # ADIF v3 length-based tokeniser (spec-compliant)
+        AdifWriter.h/.cpp
+      BandPlan.h/.cpp
+      Callsign.h/.cpp            # ITU callsign validation, prefix/base/suffix parsing, DXCC/zone lookup
+      Maidenhead.h/.cpp          # Grid square ↔ lat/lon + haversine distance
+    database/
+      DatabaseInterface.h        # Pure abstract interface
+      SqlBackendBase.h/.cpp      # Shared SQL + schema migration logic
+      SqliteBackend.h/.cpp
+      MariaDbBackend.h/.cpp
+    lookup/
+      CallsignLookupProvider.h   # Abstract base: lookup(), resultReady, lookupFailed, isAvailable()
+      CallsignLookupResult.h     # Plain struct: name, qth, state, county, country, grid, cont,
+                                 #   dxcc, cqZone, ituZone, lat, lon, licenseClass, imageUrl, …
+      QrzXmlLookupProvider.h/.cpp  # QRZ XML Data API provider (requires QRZ subscription)
+      CtyDatLookupProvider.h/.cpp  # Offline DXCC/zone lookup from CTY.dat
+                                   # Both take a *Config of callables; never read Settings
+
 src/
   main.cpp
   app/
@@ -59,28 +86,6 @@ src/
       SecureSettings.h/.cpp    # Async keychain loader; call loadAll() at startup
       SettingsDialog.h/.cpp    # Multi-page settings UI
       pages/                   # One .h/.cpp per settings page (incl. CallsignLookupPage)
-  core/
-    logbook/
-      Qso.h                    # Central data struct (~160 fields, plain value type)
-      QsoFilter.h/.cpp         # Query/filter helpers
-    adif/
-      AdifParser.h/.cpp        # ADIF v3 length-based tokeniser (spec-compliant)
-      AdifWriter.h/.cpp
-    BandPlan.h/.cpp
-    Callsign.h/.cpp            # ITU callsign validation, prefix/base/suffix parsing, DXCC/zone lookup
-    Maidenhead.h/.cpp          # Grid square ↔ lat/lon + haversine distance
-  database/
-    DatabaseInterface.h        # Pure abstract interface
-    SqlBackendBase.h/.cpp      # Shared SQL + schema migration logic
-    SqliteBackend.h/.cpp
-    MariaDbBackend.h/.cpp
-  lookup/
-    CallsignLookupProvider.h   # Abstract base: lookup(), resultReady, lookupFailed, isAvailable()
-    CallsignLookupResult.h     # Plain struct: name, qth, state, county, country, grid, cont,
-                               #   dxcc, cqZone, ituZone, lat, lon, licenseClass, imageUrl, …
-    QrzXmlLookupProvider.h/.cpp  # QRZ XML Data API provider (requires QRZ subscription)
-    CtyDatLookupProvider.h/.cpp  # Offline DXCC/zone lookup from CTY.dat
-                                 # Both take a *Config of callables; never read Settings
   radio/
     RadioBackend.h             # Abstract base: freqChanged, modeChanged, transmitChanged
     HamlibBackend.h/.cpp       # Hamlib CAT (compile-time optional via HAVE_HAMLIB)
@@ -123,7 +128,7 @@ tools/
 
 **Database operations** return `std::expected<T, QString>`. Never throw from DB code.
 
-**Settings access** always goes through `Settings::instance()` (non-secret) or `SecureSettings::instance()` (passwords, API keys). Do not read `QSettings` directly anywhere else.
+**Settings access** always goes through `Settings::instance()` (non-secret) or `SecureSettings::instance()` (passwords, API keys). Do not read `QSettings` directly anywhere else. Code in `libs/nf0t-core/` never reads settings at all: the app passes values in (see `CtyDatConfig`, `QrzXmlConfig`).
 
 ## Code conventions
 
