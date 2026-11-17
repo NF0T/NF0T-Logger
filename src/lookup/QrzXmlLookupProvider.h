@@ -5,8 +5,18 @@
 #include "CallsignLookupProvider.h"
 #include "CallsignLookupResult.h"
 
+#include <functional>
+
 class QNetworkAccessManager;
 class QNetworkReply;
+
+/// Supplied by the host application. Every value is read at the moment it is
+/// needed, so a credential change takes effect without re-creating the provider.
+struct QrzXmlConfig {
+    std::function<bool()>    enabled;
+    std::function<QString()> username;
+    std::function<QString()> password;
+};
 
 /// QRZ XML Data API provider.
 ///
@@ -18,7 +28,7 @@ class QrzXmlLookupProvider : public CallsignLookupProvider
     Q_OBJECT
 
 public:
-    explicit QrzXmlLookupProvider(QObject *parent = nullptr);
+    explicit QrzXmlLookupProvider(QrzXmlConfig config, QObject *parent = nullptr);
 
     QString displayName() const override { return QStringLiteral("QRZ XML"); }
     bool    isAvailable() const override;
@@ -36,6 +46,7 @@ private:
     };
     static ParsedResponse parseXml(const QByteArray &data);
 
+    QrzXmlConfig           m_config;
     QNetworkAccessManager *m_nam;
 
     QString m_sessionKey;

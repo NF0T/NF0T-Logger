@@ -12,7 +12,7 @@ set(SOURCES
     app/settings/pages/WsjtxPage.cpp
     app/settings/pages/DisplayPage.cpp
     app/settings/pages/CallsignLookupPage.cpp
-    core/logbook/QsoTableModel.cpp
+    ui/QsoTableModel.cpp
     core/adif/AdifParser.cpp
     core/adif/AdifWriter.cpp
     core/BandPlan.cpp
@@ -59,7 +59,7 @@ set(HEADERS
     app/settings/pages/CallsignLookupPage.h
     core/logbook/Qso.h
     core/logbook/QsoFilter.h
-    core/logbook/QsoTableModel.h
+    ui/QsoTableModel.h
     core/adif/AdifParser.h
     core/adif/AdifWriter.h
     core/BandPlan.h

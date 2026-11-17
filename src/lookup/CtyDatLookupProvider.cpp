@@ -8,15 +8,17 @@
 #include <QStandardPaths>
 #include <QTextStream>
 
-#include "app/settings/Settings.h"
+#include <utility>
+
 #include "core/Callsign.h"
 
 // ---------------------------------------------------------------------------
 // Construction / file loading
 // ---------------------------------------------------------------------------
 
-CtyDatLookupProvider::CtyDatLookupProvider(QObject *parent)
+CtyDatLookupProvider::CtyDatLookupProvider(CtyDatConfig config, QObject *parent)
     : CallsignLookupProvider(parent)
+    , m_config(std::move(config))
 {
     bool isBundled = false;
     const QString path = resolveFilePath(isBundled);
@@ -25,14 +27,14 @@ CtyDatLookupProvider::CtyDatLookupProvider(QObject *parent)
 
 bool CtyDatLookupProvider::isAvailable() const
 {
-    return m_loaded && Settings::instance().ctyDatEnabled();
+    return m_loaded && m_config.enabled && m_config.enabled();
 }
 
-QString CtyDatLookupProvider::resolveFilePath(bool &outIsBundled)
+QString CtyDatLookupProvider::resolveFilePath(bool &outIsBundled) const
 {
     outIsBundled = false;
 
-    const QString custom = Settings::instance().ctyDatCustomPath();
+    const QString custom = m_config.customPath ? m_config.customPath() : QString();
     if (!custom.isEmpty() && QFile::exists(custom))
         return custom;
 
@@ -43,7 +45,7 @@ QString CtyDatLookupProvider::resolveFilePath(bool &outIsBundled)
         return installed;
 
     outIsBundled = true;
-    return QStringLiteral(":/data/cty.dat");
+    return m_config.bundledPath;
 }
 
 void CtyDatLookupProvider::load(const QString &path, bool isBundled)

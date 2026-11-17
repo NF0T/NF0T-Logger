@@ -4,7 +4,7 @@
 
 #include <QAbstractTableModel>
 #include <QList>
-#include "Qso.h"
+#include "core/logbook/Qso.h"
 
 /// QAbstractTableModel backed by a list of Qso records.
 /// MainWindow owns the database; call setQsos() after each load/reload.

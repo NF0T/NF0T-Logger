@@ -62,7 +62,6 @@ src/
   core/
     logbook/
       Qso.h                    # Central data struct (~160 fields, plain value type)
-      QsoTableModel.h/.cpp     # Qt model for the main log table
       QsoFilter.h/.cpp         # Query/filter helpers
     adif/
       AdifParser.h/.cpp        # ADIF v3 length-based tokeniser (spec-compliant)
@@ -80,6 +79,8 @@ src/
     CallsignLookupResult.h     # Plain struct: name, qth, state, county, country, grid, cont,
                                #   dxcc, cqZone, ituZone, lat, lon, licenseClass, imageUrl, …
     QrzXmlLookupProvider.h/.cpp  # QRZ XML Data API provider (requires QRZ subscription)
+    CtyDatLookupProvider.h/.cpp  # Offline DXCC/zone lookup from CTY.dat
+                                 # Both take a *Config of callables; never read Settings
   radio/
     RadioBackend.h             # Abstract base: freqChanged, modeChanged, transmitChanged
     HamlibBackend.h/.cpp       # Hamlib CAT (compile-time optional via HAVE_HAMLIB)
@@ -94,6 +95,7 @@ src/
     QrzService.h/.cpp
     ClubLogService.h/.cpp
   ui/
+    QsoTableModel.h/.cpp       # Qt model for the main log table (reads display units from Settings)
     RadioPanel.h/.cpp          # RX/TX pill indicators + frequency display
     LogFilterBar.h/.cpp        # Callsign/band/mode/date/QSL filter bar with debounce
     WhatsNewDialog.h/.cpp      # Fetches GitHub release notes for current APP_VERSION on upgrade
