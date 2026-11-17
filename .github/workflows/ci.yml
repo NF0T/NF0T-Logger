@@ -85,6 +85,8 @@ jobs:
             qt6-base:p
             qt6-websockets:p
             qtkeychain-qt6:p
+            # Client library for Qt's MariaDB/MySQL SQL driver (MariaDB backend).
+            libmariadbclient:p
 
       - name: Configure
         shell: msys2 {0}
