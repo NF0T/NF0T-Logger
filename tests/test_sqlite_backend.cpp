@@ -245,20 +245,29 @@ void TestSqliteBackend::duplicateIsRejectedNotThrown()
 
 void TestSqliteBackend::missingStationCallsign()
 {
-    // station_callsign is NOT NULL DEFAULT '', but it is bound directly rather
-    // than through the empty-to-NULL helper, so an empty QString is stored as
-    // '' while a null QString (a Qso nobody set it on) binds NULL and the
-    // insert is rejected.
+    // station_callsign is NOT NULL DEFAULT '': an unset (null) or empty
+    // station callsign is stored as '' on insert and on update.
     Qso unset = make(QStringLiteral("W1AW"), at(1, 0));
     unset.stationCallsign = QString();
-    const auto r = insert(unset);
-    QVERIFY(!r.has_value());
-    QVERIFY(r.error().contains(QStringLiteral("station_callsign"), Qt::CaseInsensitive));
+    const auto id = insert(unset);
+    QVERIFY2(id.has_value(), qPrintable(errorOf(id)));
 
-    Qso empty = make(QStringLiteral("W1AW"), at(1, 0));
+    Qso empty = make(QStringLiteral("K1ABC"), at(1, 0));
     empty.stationCallsign = QStringLiteral("");
     QVERIFY(insert(empty).has_value());
-    QVERIFY(fetch().value(0).stationCallsign.isEmpty());
+
+    for (const Qso &q : fetch())
+        QVERIFY2(q.stationCallsign.isEmpty(), qPrintable(q.callsign));
+
+    Qso set = fetch().value(0);
+    set.stationCallsign = QStringLiteral("NF0T");
+    QVERIFY(m_db->updateQso(set).has_value());
+    set.stationCallsign = QString();
+    const auto updated = m_db->updateQso(set);
+    QVERIFY2(updated.has_value(), qPrintable(errorOf(updated)));
+    QsoFilter byCall;
+    byCall.exactCall = set.callsign;
+    QVERIFY(fetch(byCall).value(0).stationCallsign.isEmpty());
 }
 
 void TestSqliteBackend::updateDeleteClear()
