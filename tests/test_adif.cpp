@@ -32,7 +32,7 @@ private slots:
     void fieldNamesAreCaseInsensitive();
     void headerFieldsAreNotRecords();
     void headerlessFileKeepsFirstRecord();
-    void writerHeaderlessOutputIsNotReadBack();
+    void writerHeaderlessOutputIsReadBack();
     void recordsMissingRequiredFieldsAreSkipped();
     void fourDigitTimeOn();
     void unparseableDateWarns();
@@ -101,23 +101,27 @@ void TestAdif::defaultsAreOmittedAndRoundTrip()
 
 void TestAdif::arrlCheckRoundTrip()
 {
-    // ADIF's Sweepstakes check field is CHECK. The writer emits arrlCheck as
-    // a second ARRL_SECT and the parser reads arrlCheck from ARRL_SECT, so the
-    // check value overwrites the section on re-import.
+    // The Sweepstakes check is ADIF's CHECK field, separate from ARRL_SECT.
     Qso in = minimal();
     in.arrlSect  = QStringLiteral("EMO");
     in.arrlCheck = QStringLiteral("75");
 
     const QString text = AdifWriter::writeString({in});
     QVERIFY(text.contains(QStringLiteral("<ARRL_SECT:3>EMO")));
-    QVERIFY(text.contains(QStringLiteral("<ARRL_SECT:2>75")));
-    QVERIFY(!text.contains(QStringLiteral("<CHECK:")));
+    QVERIFY(text.contains(QStringLiteral("<CHECK:2>75")));
+    QCOMPARE(text.count(QStringLiteral("<ARRL_SECT:")), 1);
 
     const auto r = AdifParser::parseString(text);
     QCOMPARE(r.qsos.size(), 1);
-    QCOMPARE(r.qsos.first().arrlCheck, in.arrlCheck);
-    QEXPECT_FAIL("", "Known defect: arrlCheck is written and read as ARRL_SECT, overwriting the section", Continue);
     QCOMPARE(r.qsos.first().arrlSect, in.arrlSect);
+    QCOMPARE(r.qsos.first().arrlCheck, in.arrlCheck);
+
+    // A section on its own no longer leaks into the check.
+    const auto sectOnly = AdifParser::parseString(QStringLiteral(
+        "<EOH><CALL:4>W1AW<QSO_DATE:8>20260102<TIME_ON:6>030405<ARRL_SECT:3>emo<EOR>"));
+    QCOMPARE(sectOnly.qsos.size(), 1);
+    QCOMPARE(sectOnly.qsos.first().arrlSect, QStringLiteral("EMO"));
+    QVERIFY(sectOnly.qsos.first().arrlCheck.isEmpty());
 }
 
 void TestAdif::appFieldsCanBeExcluded()
@@ -196,27 +200,29 @@ void TestAdif::headerFieldsAreNotRecords()
 
 void TestAdif::headerlessFileKeepsFirstRecord()
 {
-    // ADIF allows a file with no header. The parser's own comment says such
-    // files are processed, but fields are only collected after <EOH> or the
-    // first <EOR>, so the first record of a headerless file is dropped. This
-    // includes AdifWriter's own output with includeHeader = false.
+    // The ADIF header is optional; without <EOH>, every field belongs to a
+    // record. Text outside tags (a stray preamble, line breaks) is ignored.
     const auto r = AdifParser::parseString(QStringLiteral(
-        "<CALL:4>W1AW<QSO_DATE:8>20260102<TIME_ON:6>030405<EOR>"
+        "\n  <CALL:4>W1AW<QSO_DATE:8>20260102<TIME_ON:6>030405<EOR>\n"
         "<CALL:5>K1ABC<QSO_DATE:8>20260102<TIME_ON:6>030506<EOR>"));
-    QEXPECT_FAIL("", "Known defect: first record of a headerless ADIF file is silently dropped", Abort);
     QCOMPARE(r.qsos.size(), 2);
+    QCOMPARE(r.qsos.at(0).callsign, QStringLiteral("W1AW"));
+    QCOMPARE(r.qsos.at(1).callsign, QStringLiteral("K1ABC"));
+    QCOMPARE(r.skipped, 0);
 }
 
-void TestAdif::writerHeaderlessOutputIsNotReadBack()
+void TestAdif::writerHeaderlessOutputIsReadBack()
 {
     AdifWriter::Options opts;
     opts.includeHeader = false;
-    const QString text = AdifWriter::writeString({minimal()}, opts);
+    const QList<Qso> in{QsoFixtures::fullyPopulated(), minimal(QStringLiteral("JA1XYZ"))};
+    const QString text = AdifWriter::writeString(in, opts);
     QVERIFY(!text.contains(QStringLiteral("<EOH>")));
 
     const auto r = AdifParser::parseString(text);
-    QEXPECT_FAIL("", "Known defect: first record of a headerless ADIF file is silently dropped", Abort);
-    QCOMPARE(r.qsos.size(), 1);
+    QCOMPARE(r.qsos.size(), 2);
+    COMPARE_QSO(r.qsos.at(0), in.at(0), kLatLonTol);
+    COMPARE_QSO(r.qsos.at(1), in.at(1), kLatLonTol);
 }
 
 void TestAdif::recordsMissingRequiredFieldsAreSkipped()
