@@ -70,6 +70,15 @@ Starting with the first release after v0.4.0, NF0T Logger will adopt **CalVer** 
 
 Existing tags (`v0.1.0` through `v0.4.0`) remain unchanged in git history. The switch took effect with `v26.6.1`.
 
+**Amended November 2026 — week-based third segment.** From the first release after `v26.9.2`, the scheme is `YY.MM.W`. `W` is the week of the month, where weeks run Sunday–Saturday and the (possibly partial) week containing the 1st is week 1, so a month has 4–6 weeks. The fourth segment now means "another release in the same week", hotfix or not:
+
+| Tag | Meaning |
+|---|---|
+| `v26.11.3` | Released in the third week of November 2026 (Sun 15 – Sat 21) |
+| `v26.11.3.1` | A second release, or a hotfix, in that same week |
+
+This is a project convention: standard CalVer's `WW` is week of the *year*. Tags already released under the old scheme are unchanged.
+
 ---
 
 ## v26.XX.N — Release Packaging and Distribution ✓ shipped
@@ -218,6 +227,113 @@ A user-configured custom SQLite path was silently ignored in favor of the defaul
 ### Release pipeline fix (#27)
 
 `.github/workflows/release.yml` triggered on a tag push, but the only way to create a tag through the GitHub Release UI/API is to publish the release first — and GitHub's Immutable Releases feature permanently locks a release's assets and tag the instant it publishes, no exceptions. "Publish, then upload" was therefore the *only* sequence the old design made possible, and it's exactly the sequence Immutable Releases forbids. Retargeted the trigger to the version bump landing on `main` instead: a `detect-version` job diffs `CMakeLists.txt`'s CalVer against existing tags so an ordinary push to `main` is a no-op, and the build job now attaches assets to the still-draft release and publishes only as its own last action — no more manual "push a tag" or "publish the draft" step for a human to get out of order.
+
+---
+
+## v26.11.3 — TCI 2.1, live UTC clock, and the nf0t-core library ✓ shipped
+
+The first release under the week-based CalVer scheme (`YY.MM.W`).
+
+### TCI 2.1 client compliance (#34)
+
+The TCI backend follows the TCI 2.1 parsing rules. It also supports split operation and DX spot clicks. Slices that AetherSDR opens after connecting are now tracked: AetherSDR announces them with `rx_enable` instead of an updated `trx_count`. The logger records the focused receiver's frequency, and records split only while the split receiver is focused. One known gap remains: with transmit on slice A and focus on slice B, the logger records B's frequency (see CLAUDE.md, "Known issues").
+
+### Quick entry panel (#31, #32)
+
+The tab order now follows the operating sequence, and the static Now button is replaced by a live-ticking UTC clock with a lock toggle. See the two milestones below.
+
+### Logbook fixes (#37, #38, #39)
+
+- A headerless ADIF file no longer loses its first record on import.
+- The ARRL Sweepstakes check is written to and read from the ADIF `CHECK` field instead of overwriting the section.
+- A QSO with no station callsign is stored with an empty one instead of being rejected by the database.
+
+These came out of the characterization tests written for the nf0t-core work.
+
+### nf0t-core, phase A (#35, #36, #41, #42)
+
+Logbook, ADIF, callsign/grid/band, database and callsign-lookup code is now a static library at `libs/nf0t-core/`, with its own unit tests run on all three platforms. There is no user-visible change. See the nf0t-core milestone below.
+
+### Release process (#43)
+
+The release procedure is now a repository skill (`.claude/skills/release/`), and the version's third segment is the week of the month (see the CalVer section above).
+
+---
+
+## v26.11.3 — Quick Entry Panel Field Ordering ✓ shipped
+
+Field feedback from extended field use: the tab order and visual layout of `QsoQuickEntryPanel` need to match actual operating sequence.
+
+### Default focus
+
+Callsign already receives focus on `clearForm()`, `resetForm()`, and after `onLogClicked()` logs a contact ([QsoQuickEntryPanel.cpp](src/ui/entrypanel/QsoQuickEntryPanel.cpp)). This is the correct behavior and must be preserved — call it out explicitly here so it isn't lost incidentally while reordering the rest of the tab chain.
+
+### New tab order
+
+Callsign → RST Sent → RST Received → Comment → Band → Freq → Mode → Submode → Log button.
+
+This changes two things from the current chain (`setTabOrder()` calls, currently `callsign → rstSent → rstRcvd → band → freq → mode → comment → logBtn`):
+
+- **Comment moves up**, immediately after RST Received, instead of after Mode
+- **Submode joins the tab chain** — it currently isn't wired into `setTabOrder()` at all despite being a populated field (`m_submode`, populated by `onModeChanged()`)
+
+### Visual (left-to-right) order
+
+Band, Freq, Mode, Submode — left to right, matching the suggested tab order for that trailing group. Row 2's current layout (`row2->addWidget(...)`) already places them in roughly this order; verify Submode is visually present in that row (it's currently constructed but not added to any layout) and lands after Mode.
+
+---
+
+## v26.11.3 — Live Clock Time Entry ✓ shipped
+
+Replaces the static "time + Now button" entry with a continuously running clock, so the operator doesn't need to remember to press Now before logging.
+
+### Behavior
+
+- `m_dateTime` ticks forward once per second (UTC) while unlocked, driven by a 1s `QTimer`, instead of only updating when the **Now** button is clicked
+- A padlock-style toggle button replaces (or augments) the current **Now** button:
+  - **Unlocked / live** — the clock keeps ticking; the field is read-only while live, since a live-updating value can't be hand-edited
+  - **Locked** — clicking the padlock freezes the displayed time and makes the field editable, for manual entry (e.g. logging a contact after the fact)
+  - The icon changes color/state between the two (e.g. open vs. closed padlock) so the current mode is visible at a glance
+- Clicking the padlock again while locked resyncs to the current time and resumes ticking
+
+### Recording time on log
+
+`buildQso()` already reads `m_dateTime->dateTime()` at the moment `onLogClicked()` executes ([QsoQuickEntryPanel.cpp:607](src/ui/entrypanel/QsoQuickEntryPanel.cpp)), not at some earlier snapshot — this is the desired semantics and doesn't need to change. What needs to change is *what* `m_dateTime` holds at that moment: currently a static value last set by clearForm() or a Now click; going forward, the live-ticking current time whenever unlocked, or the manually-locked value otherwise.
+
+### Notes
+
+- `clearForm()` currently sets `m_dateTime` to `QDateTime::currentDateTimeUtc()` once (a static snapshot); it should instead reset the panel to the unlocked/live state so the clock resumes ticking for the next entry
+- `onNowClicked()` / `m_nowBtn` are superseded by the lock toggle's unlock action, which has the same resync-to-now effect
+- Files: [QsoQuickEntryPanel.h](src/ui/entrypanel/QsoQuickEntryPanel.h), [QsoQuickEntryPanel.cpp](src/ui/entrypanel/QsoQuickEntryPanel.cpp)
+
+---
+
+## v26.XX.N — nf0t-core Shared Library
+
+**Status:** steps 1–3 (carve in place) shipped in v26.11.3. Step 4, the split into its own repository, waits until that release has been in use without regressions.
+
+Extract NF0T Logger's application-independent code into **`nf0t-core`**, a static library in its own repository (`NF0T/nf0t-core`, GPL-3.0) consumed as a git submodule. The second consumer is a planned standalone companion app for the 3905 Century Club nets and awards; sharing the core keeps ADIF, callsign handling and the database layer maintained in one place instead of copied.
+
+This is a refactor: **no user-visible change, no schema change, no settings change** to NF0T Logger.
+
+### What moves
+
+- `Qso` value type and `QsoFilter`
+- ADIF parser and writer (including the `APP_NF0T_*` fields)
+- `Callsign`, `Maidenhead`, `BandPlan`
+- `DatabaseInterface`, `SqlBackendBase`, SQLite and MariaDB backends
+- Callsign lookup interface plus the CTY.dat and QRZ XML providers
+
+QSL services, radio backends, WSJT-X, settings and all UI stay in the app. `QsoTableModel` is presentation, so it stays too, relocated to `src/ui/`.
+
+### Approach
+
+1. **Characterization tests** for everything that moves, so behaviour is pinned before anything is touched. Builds on the test infrastructure from the TCI 2.1 work.
+2. **Decouple** the lookup providers from `Settings::instance()` / `SecureSettings` through injected, pull-based configuration. `MainWindow::wireCallsignLookup()` supplies it, and it is the only call site.
+3. **Carve in place** as a `libs/nf0t-core/` library target whose CMake cannot see `src/`. The compiler proves there is no hidden coupling. Include paths are unchanged (`core/…`, `database/…`, `lookup/…`), and `log4om-migrate` links the library instead of compiling database sources directly. Ship this in a normal release.
+4. **Split** `libs/nf0t-core/` with its history into its own repo and re-add it as a submodule at the same path. CI checkouts gain `submodules: recursive`.
+
+Full step-by-step plan, gates and open questions: [docs/nf0t-core-plan.md](docs/nf0t-core-plan.md).
 
 ---
 

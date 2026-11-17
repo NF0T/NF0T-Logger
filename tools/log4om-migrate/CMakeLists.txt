@@ -4,17 +4,14 @@ qt_add_executable(log4om-migrate
     main.cpp
     Log4OmMigrator.h
     Log4OmMigrator.cpp
-    # Reuse database backend directly (no separate library target in src/)
-    ${CMAKE_SOURCE_DIR}/src/database/SqlBackendBase.cpp
-    ${CMAKE_SOURCE_DIR}/src/database/SqliteBackend.cpp
 )
 
 target_include_directories(log4om-migrate PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src        # reuse src/core and src/database headers
 )
 
 target_link_libraries(log4om-migrate PRIVATE
+    nf0t-core
     Qt6::Core
     Qt6::Sql
 )

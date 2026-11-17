@@ -5,9 +5,20 @@
 #include "CallsignLookupProvider.h"
 #include "CallsignLookupResult.h"
 
+#include <functional>
+
 #include <QHash>
 #include <QString>
 #include <QVector>
+
+/// Supplied by the host application. The file is chosen once, at construction;
+/// enabled() is read on every isAvailable() call, so toggling it takes effect
+/// without re-creating the provider.
+struct CtyDatConfig {
+    std::function<bool()>    enabled;
+    std::function<QString()> customPath;   // empty = none
+    QString                  bundledPath;  // e.g. ":/data/cty.dat", owned by the app
+};
 
 /// Offline DXCC lookup provider backed by the CTY.dat country file (AD1C / Big Cty).
 ///
@@ -18,15 +29,15 @@
 /// Does not populate: dxcc, name, qth, state, gridsquare, licenseClass, or image fields.
 ///
 /// File resolution order:
-///   1. Settings::ctyDatCustomPath() if non-empty and the file exists
+///   1. CtyDatConfig::customPath() if non-empty and the file exists
 ///   2. QStandardPaths::AppLocalDataLocation/cty.dat  (user-updated)
-///   3. :/data/cty.dat                                 (bundled Qt resource)
+///   3. CtyDatConfig::bundledPath                     (shipped with the app)
 class CtyDatLookupProvider : public CallsignLookupProvider
 {
     Q_OBJECT
 
 public:
-    explicit CtyDatLookupProvider(QObject *parent = nullptr);
+    explicit CtyDatLookupProvider(CtyDatConfig config, QObject *parent = nullptr);
 
     QString displayName() const override { return QStringLiteral("CTY.dat"); }
     bool    isAvailable() const override;
@@ -55,7 +66,7 @@ private:
         double  lon = 0.0;
     };
 
-    static QString resolveFilePath(bool &outIsBundled);
+    QString resolveFilePath(bool &outIsBundled) const;
     void load(const QString &path, bool isBundled);
     void parseRecord(const QString &header, const QString &aliasList);
     CallsignLookupResult buildResult(const QString &callsign,
@@ -64,6 +75,8 @@ private:
     QVector<Entity>             m_entities;
     QHash<QString, MatchResult> m_exactMap;   // key = exact callsign (uppercase, no leading '=')
     QHash<QString, MatchResult> m_prefixMap;  // key = prefix string  (uppercase)
+
+    CtyDatConfig m_config;
 
     bool    m_loaded   = false;
     QString m_fileDate;

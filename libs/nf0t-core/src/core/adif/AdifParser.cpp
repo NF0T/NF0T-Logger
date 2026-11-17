@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #include "AdifParser.h"
 
+#include <algorithm>
+
 #include <QFile>
 #include <QTextStream>
 #include <QTimeZone>
@@ -28,7 +30,10 @@ AdifParser::Result AdifParser::parseString(const QString &adif)
     Result result;
     const QList<Token> tokens = tokenise(adif);
 
-    bool pastHeader = false;
+    // The header is optional and, when present, always ends with <EOH>.
+    // Without one, every field belongs to a record.
+    bool pastHeader = std::none_of(tokens.cbegin(), tokens.cend(),
+                                   [](const Token &t) { return t.isEoh; });
     FieldMap fields;
 
     for (const Token &tok : tokens) {
@@ -37,7 +42,6 @@ AdifParser::Result AdifParser::parseString(const QString &adif)
             continue;
         }
         if (tok.isEor) {
-            // If no <EOH> was found we still process (headerless files)
             if (!fields.isEmpty()) {
                 if (fields.contains("CALL") && fields.contains("QSO_DATE") && fields.contains("TIME_ON")) {
                     result.qsos << toQso(fields, result.warnings);
@@ -48,7 +52,6 @@ AdifParser::Result AdifParser::parseString(const QString &adif)
                 }
             }
             fields.clear();
-            pastHeader = true;  // treat first EOR as implicit EOH
             continue;
         }
         if (pastHeader)
@@ -226,7 +229,7 @@ Qso AdifParser::toQso(const FieldMap &f, QStringList &warn)
     q.stxString    = val("STX_STRING");
     q.precedence   = val("PRECEDENCE").toUpper();
     q.contestClass = val("CLASS").toUpper();
-    q.arrlCheck    = val("ARRL_SECT").toUpper();  // ARRL_SECT doubles as section in Sweepstakes
+    q.arrlCheck    = val("CHECK").toUpper();
 
     // --- Special activities ---
     q.sig       = val("SIG").toUpper();

@@ -5,7 +5,7 @@
 #include <QPainter>
 #include <QStyleOptionHeader>
 
-#include "core/logbook/QsoTableModel.h"
+#include "ui/QsoTableModel.h"
 
 // ---------------------------------------------------------------------------
 // QslGroupHeaderView

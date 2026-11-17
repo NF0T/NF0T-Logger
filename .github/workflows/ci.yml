@@ -36,6 +36,7 @@ jobs:
             g++ cmake ninja-build pkg-config \
             qt6-base-dev \
             libqt6websockets6-dev \
+            libqt6sql6-sqlite \
             qtkeychain-qt6-dev \
             libsecret-1-dev \
             libhamlib-dev
@@ -45,6 +46,11 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1
@@ -87,6 +93,12 @@ jobs:
         shell: msys2 {0}
         run: cmake --build build --parallel
 
+      - name: Test
+        shell: msys2 {0}
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -99,7 +111,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-macos:
     name: macOS (Apple Silicon)
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v6.0.2
@@ -114,6 +126,11 @@ jobs:
 
       - name: Build
         run: cmake --build build --parallel
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7.0.1

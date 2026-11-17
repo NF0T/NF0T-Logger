@@ -1,4 +1,7 @@
 name-template: 'v$RESOLVED_VERSION'
+# Version-bump and develop->main release PRs are release mechanics, not changes.
+exclude-labels:
+  - 'release'
 tag-template: 'v$RESOLVED_VERSION'
 
 categories:

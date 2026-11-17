@@ -39,7 +39,8 @@ QString AdifWriter::writeString(const QList<Qso> &qsos, const Options &opts)
 QString AdifWriter::header(const Options &opts)
 {
     QString h;
-    h += QString("NF0T Logger ADIF Export\n");
+    h += opts.programId.isEmpty() ? QStringLiteral("ADIF Export\n")
+                                  : opts.programId + QStringLiteral(" ADIF Export\n");
     h += f("ADIF_VER",          "3.1.4");
     h += f("CREATED_TIMESTAMP", QDateTime::currentDateTimeUtc().toString("yyyyMMdd HHmmss"));
     h += f("PROGRAMID",         opts.programId);
@@ -159,7 +160,7 @@ QString AdifWriter::record(const Qso &qso, const Options &opts)
     r += f("STX_STRING",       qso.stxString);
     r += f("PRECEDENCE",       qso.precedence);
     r += f("CLASS",            qso.contestClass);
-    r += f("ARRL_SECT",        qso.arrlCheck);
+    r += f("CHECK",            qso.arrlCheck);
 
     // Special activities
     r += f("SIG",              qso.sig);

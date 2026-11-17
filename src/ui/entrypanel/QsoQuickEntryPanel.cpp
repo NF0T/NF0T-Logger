@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #include "QsoQuickEntryPanel.h"
 
+#include <cmath>
+
 #include <QComboBox>
 #include <QDateTimeEdit>
 #include <QDialog>
@@ -48,10 +50,13 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     m_dateTime->setFixedWidth(168);
     m_dateTime->setToolTip(tr("QSO start time (UTC)"));
 
-    m_nowBtn = new QPushButton(tr("Now"), this);
-    m_nowBtn->setFixedWidth(42);
-    m_nowBtn->setToolTip(tr("Set to current UTC time"));
-    connect(m_nowBtn, &QPushButton::clicked, this, &QsoQuickEntryPanel::onNowClicked);
+    m_lockBtn = new QPushButton(this);
+    m_lockBtn->setFixedWidth(30);
+    connect(m_lockBtn, &QPushButton::clicked, this, &QsoQuickEntryPanel::onLockClicked);
+
+    m_clockTimer = new QTimer(this);
+    m_clockTimer->setInterval(1000);
+    connect(m_clockTimer, &QTimer::timeout, this, &QsoQuickEntryPanel::onClockTick);
 
     m_callsign = new QLineEdit(this);
     m_callsign->setPlaceholderText(tr("Callsign"));
@@ -149,7 +154,7 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
     auto *row1 = new QHBoxLayout;
     row1->addWidget(new QLabel(tr("UTC:"), this));
     row1->addWidget(m_dateTime);
-    row1->addWidget(m_nowBtn);
+    row1->addWidget(m_lockBtn);
     row1->addWidget(makeSep());
     row1->addWidget(new QLabel(tr("Call:"), this));
     row1->addWidget(m_callsign);
@@ -190,11 +195,12 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
 
     setTabOrder(m_callsign, m_rstSent);
     setTabOrder(m_rstSent,  m_rstRcvd);
-    setTabOrder(m_rstRcvd,  m_band);
+    setTabOrder(m_rstRcvd,  m_comment);
+    setTabOrder(m_comment,  m_band);
     setTabOrder(m_band,     m_freq);
     setTabOrder(m_freq,     m_mode);
-    setTabOrder(m_mode,     m_comment);
-    setTabOrder(m_comment,  m_logBtn);
+    setTabOrder(m_mode,     m_submode);
+    setTabOrder(m_submode,  m_logBtn);
 
     // -----------------------------------------------------------------------
     // Right column — context panel (lookup + previous QSOs)
@@ -284,10 +290,21 @@ QsoQuickEntryPanel::QsoQuickEntryPanel(QWidget *parent)
 
 void QsoQuickEntryPanel::setRadioFreq(double freqMhz)
 {
+    m_radioRxFreq = freqMhz;
     setFreqSilently(freqMhz);
     const QString band = BandPlan::freqToBand(freqMhz);
     if (!band.isEmpty())
         setBandSilently(band);
+}
+
+void QsoQuickEntryPanel::setRadioTxFreq(double freqMhz)
+{
+    m_radioTxFreq = freqMhz;
+}
+
+void QsoQuickEntryPanel::setRadioSplit(bool split)
+{
+    m_radioSplit = split;
 }
 
 void QsoQuickEntryPanel::setRadioMode(const QString &mode, const QString &submode)
@@ -475,7 +492,7 @@ void QsoQuickEntryPanel::clearForm()
 {
     clearLookupPanel();
 
-    m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
+    setClockLive(true);
     m_callsign->clear();
     m_rstSent->clear();
     m_rstRcvd->clear();
@@ -488,9 +505,31 @@ void QsoQuickEntryPanel::clearForm()
     m_callsign->setFocus();
 }
 
-void QsoQuickEntryPanel::onNowClicked()
+void QsoQuickEntryPanel::setClockLive(bool live)
+{
+    m_clockLive = live;
+    m_dateTime->setReadOnly(live);
+
+    if (live) {
+        m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
+        m_clockTimer->start();
+        m_lockBtn->setText(QStringLiteral("\U0001F513"));   // 🔓
+        m_lockBtn->setToolTip(tr("Live — click to lock and edit manually"));
+    } else {
+        m_clockTimer->stop();
+        m_lockBtn->setText(QStringLiteral("\U0001F512"));   // 🔒
+        m_lockBtn->setToolTip(tr("Locked — click to resume live clock"));
+    }
+}
+
+void QsoQuickEntryPanel::onClockTick()
 {
     m_dateTime->setDateTime(QDateTime::currentDateTimeUtc());
+}
+
+void QsoQuickEntryPanel::onLockClicked()
+{
+    setClockLive(!m_clockLive);
 }
 
 void QsoQuickEntryPanel::onModeChanged(int /*index*/)
@@ -613,6 +652,21 @@ Qso QsoQuickEntryPanel::buildQso() const
     q.rstSent    = m_rstSent->text().trimmed();
     q.rstRcvd    = m_rstRcvd->text().trimmed();
     q.comment    = m_comment->text().trimmed();
+
+    // Split: ADIF FREQ is the TX frequency and FREQ_RX the receive one. Only
+    // when the field still shows the radio's RX frequency (to 1 Hz) — a
+    // hand-entered frequency is the operator's, not the radio's.
+    constexpr double kOneHzMhz = 1e-6;
+    if (m_radioSplit && m_radioTxFreq > 0.0 && m_radioRxFreq > 0.0
+        && std::abs(q.freq - m_radioRxFreq) < kOneHzMhz
+        && std::abs(m_radioTxFreq - m_radioRxFreq) >= kOneHzMhz) {
+        q.freqRx = q.freq;
+        q.freq   = m_radioTxFreq;
+        q.bandRx = q.band;
+        const QString txBand = BandPlan::freqToBand(m_radioTxFreq);
+        if (!txBand.isEmpty()) q.band = txBand;
+    }
+
     enrichQso(q);
     return q;
 }

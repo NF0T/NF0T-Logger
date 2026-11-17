@@ -40,9 +40,42 @@ cmake -B build-mac -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-mac --parallel
 ```
 
+### Tests
+Qt Test executables live in `libs/nf0t-core/tests/` (library) and `tests/` (app), and run in CI on all three platforms:
+```bash
+ctest --test-dir build --output-on-failure
+```
+
 ## Source layout
 
 ```
+libs/nf0t-core/                # Static library shared with other NF0T apps; builds standalone.
+  CMakeLists.txt               # No include path to src/: app coupling is a compile error
+  tests/                       # Library unit tests (Qt Test, registered with ctest)
+  src/
+    core/
+      logbook/
+        Qso.h                    # Central data struct (~160 fields, plain value type)
+        QsoFilter.h/.cpp         # Query/filter helpers
+      adif/
+        AdifParser.h/.cpp        # ADIF v3 length-based tokeniser (spec-compliant)
+        AdifWriter.h/.cpp
+      BandPlan.h/.cpp
+      Callsign.h/.cpp            # ITU callsign validation, prefix/base/suffix parsing, DXCC/zone lookup
+      Maidenhead.h/.cpp          # Grid square ↔ lat/lon + haversine distance
+    database/
+      DatabaseInterface.h        # Pure abstract interface
+      SqlBackendBase.h/.cpp      # Shared SQL + schema migration logic
+      SqliteBackend.h/.cpp
+      MariaDbBackend.h/.cpp
+    lookup/
+      CallsignLookupProvider.h   # Abstract base: lookup(), resultReady, lookupFailed, isAvailable()
+      CallsignLookupResult.h     # Plain struct: name, qth, state, county, country, grid, cont,
+                                 #   dxcc, cqZone, ituZone, lat, lon, licenseClass, imageUrl, …
+      QrzXmlLookupProvider.h/.cpp  # QRZ XML Data API provider (requires QRZ subscription)
+      CtyDatLookupProvider.h/.cpp  # Offline DXCC/zone lookup from CTY.dat
+                                   # Both take a *Config of callables; never read Settings
+
 src/
   main.cpp
   app/
@@ -53,27 +86,6 @@ src/
       SecureSettings.h/.cpp    # Async keychain loader; call loadAll() at startup
       SettingsDialog.h/.cpp    # Multi-page settings UI
       pages/                   # One .h/.cpp per settings page (incl. CallsignLookupPage)
-  core/
-    logbook/
-      Qso.h                    # Central data struct (~160 fields, plain value type)
-      QsoTableModel.h/.cpp     # Qt model for the main log table
-      QsoFilter.h/.cpp         # Query/filter helpers
-    adif/
-      AdifParser.h/.cpp        # ADIF v3 length-based tokeniser (spec-compliant)
-      AdifWriter.h/.cpp
-    BandPlan.h/.cpp
-    Callsign.h/.cpp            # ITU callsign validation, prefix/base/suffix parsing, DXCC/zone lookup
-    Maidenhead.h/.cpp          # Grid square ↔ lat/lon + haversine distance
-  database/
-    DatabaseInterface.h        # Pure abstract interface
-    SqlBackendBase.h/.cpp      # Shared SQL + schema migration logic
-    SqliteBackend.h/.cpp
-    MariaDbBackend.h/.cpp
-  lookup/
-    CallsignLookupProvider.h   # Abstract base: lookup(), resultReady, lookupFailed, isAvailable()
-    CallsignLookupResult.h     # Plain struct: name, qth, state, county, country, grid, cont,
-                               #   dxcc, cqZone, ituZone, lat, lon, licenseClass, imageUrl, …
-    QrzXmlLookupProvider.h/.cpp  # QRZ XML Data API provider (requires QRZ subscription)
   radio/
     RadioBackend.h             # Abstract base: freqChanged, modeChanged, transmitChanged
     HamlibBackend.h/.cpp       # Hamlib CAT (compile-time optional via HAVE_HAMLIB)
@@ -88,6 +100,7 @@ src/
     QrzService.h/.cpp
     ClubLogService.h/.cpp
   ui/
+    QsoTableModel.h/.cpp       # Qt model for the main log table (reads display units from Settings)
     RadioPanel.h/.cpp          # RX/TX pill indicators + frequency display
     LogFilterBar.h/.cpp        # Callsign/band/mode/date/QSL filter bar with debounce
     WhatsNewDialog.h/.cpp      # Fetches GitHub release notes for current APP_VERSION on upgrade
@@ -115,7 +128,7 @@ tools/
 
 **Database operations** return `std::expected<T, QString>`. Never throw from DB code.
 
-**Settings access** always goes through `Settings::instance()` (non-secret) or `SecureSettings::instance()` (passwords, API keys). Do not read `QSettings` directly anywhere else.
+**Settings access** always goes through `Settings::instance()` (non-secret) or `SecureSettings::instance()` (passwords, API keys). Do not read `QSettings` directly anywhere else. Code in `libs/nf0t-core/` never reads settings at all: the app passes values in (see `CtyDatConfig`, `QrzXmlConfig`).
 
 ## Code conventions
 
@@ -128,7 +141,7 @@ tools/
 
 ## Known issues / tabled work
 
-- **TCI TX indicator** — AetherSDR does not emit the `TRX:{trx},{state}` command on PTT. Logger code is correct; waiting on AetherSDR side.
+- **TCI focus vs. TX slice** — the logger logs against the focused TRX (`active_slice` / `ECODER_SWITCH_RX`). AetherSDR reports split on TRX 0 whenever TX is on another slice, so split FREQ/FREQ_RX is only recorded while slice A is focused. Focusing slice B while TX stays on A logs B's frequency.
 - **WSJT-X multicast** — interface selector added to settings. If WSJT-X is bound to loopback, check the loopback interface in Settings → WSJT-X.
 - **Serial port default** — Settings defaults to `/dev/ttyUSB0` on all platforms. On Windows use `COM1` etc.; on macOS `/dev/cu.usbserial-*`.
 - **tQSL path placeholder** — Settings page shows `/usr/bin/tqsl`; adjust for Windows/macOS.

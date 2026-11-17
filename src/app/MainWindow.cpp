@@ -37,7 +37,7 @@
 #include "core/logbook/QsoFilter.h"
 #include "database/DatabaseInterface.h"
 #include "core/adif/AdifWriter.h"
-#include "core/logbook/QsoTableModel.h"
+#include "ui/QsoTableModel.h"
 #include "core/Maidenhead.h"
 #include "database/MariaDbBackend.h"
 #include "database/SqliteBackend.h"
@@ -985,6 +985,17 @@ void MainWindow::wireRadioBackend(RadioBackend *backend)
             m_entryPanel, &QsoQuickEntryPanel::setRadioMode);
     connect(backend, &RadioBackend::transmitChanged,
             m_radioPanel, &RadioPanel::setTransmitting);
+    connect(backend, &RadioBackend::txFreqChanged,
+            m_entryPanel, &QsoQuickEntryPanel::setRadioTxFreq);
+    connect(backend, &RadioBackend::splitChanged,
+            m_entryPanel, &QsoQuickEntryPanel::setRadioSplit);
+    connect(backend, &RadioBackend::spotClicked, this, [this](const QString &call, double freqMhz) {
+        m_entryPanel->setDxCall(call);
+        m_entryPanel->setRadioFreq(freqMhz);
+    });
+    connect(backend, &RadioBackend::deviceDiscovered, this, [this, backend](const QString &dev) {
+        showStatusMessage(tr("%1: %2 detected.").arg(backend->displayName(), dev), 4000);
+    });
 
     connect(backend, &RadioBackend::connected, this, [this, backend, indicator]() {
         setIndicatorState(indicator, IndicatorState::Connected);
@@ -1079,8 +1090,21 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
 
 void MainWindow::wireCallsignLookup()
 {
-    m_ctyProvider         = new CtyDatLookupProvider(this);
-    m_qrzProvider         = new QrzXmlLookupProvider(this);
+    m_ctyProvider = new CtyDatLookupProvider(
+        CtyDatConfig{
+            .enabled     = [] { return Settings::instance().ctyDatEnabled(); },
+            .customPath  = [] { return Settings::instance().ctyDatCustomPath(); },
+            .bundledPath = QStringLiteral(":/data/cty.dat"),
+        },
+        this);
+    m_qrzProvider = new QrzXmlLookupProvider(
+        QrzXmlConfig{
+            .enabled  = [] { return Settings::instance().callsignLookupEnabled(); },
+            .username = [] { return Settings::instance().qrzXmlUsername(); },
+            .password = [] { return Settings::instance().qrzXmlPassword(); },
+            .agent    = QStringLiteral("NF0T-Logger"),
+        },
+        this);
     m_callsignLookupTimer = new QTimer(this);
     m_callsignLookupTimer->setSingleShot(true);
     m_callsignLookupTimer->setInterval(600);

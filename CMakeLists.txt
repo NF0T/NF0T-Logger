@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(NF0T-Logger
-    VERSION 26.9.2
+    VERSION 26.11.3
     DESCRIPTION "Amateur Radio Contact Logger"
     LANGUAGES CXX
 )
@@ -56,8 +56,13 @@ else()
     message(STATUS "Hamlib not found — CAT control will be disabled")
 endif()
 
+# Before any add_subdirectory(), so tests in every directory register with ctest.
+enable_testing()
+
+add_subdirectory(libs/nf0t-core)
 add_subdirectory(src)
 add_subdirectory(tools/log4om-migrate)
+add_subdirectory(tests)
 
 # ── Packaging ────────────────────────────────────────────────────────────────
 set(CPACK_PACKAGE_NAME              "NF0T-Logger")
