@@ -36,6 +36,7 @@ jobs:
             g++ cmake ninja-build pkg-config \
             qt6-base-dev \
             libqt6websockets6-dev \
+            libqt6sql6-sqlite \
             qtkeychain-qt6-dev \
             libsecret-1-dev \
             libhamlib-dev
