@@ -230,7 +230,37 @@ A user-configured custom SQLite path was silently ignored in favor of the defaul
 
 ---
 
-## v26.XX.N — Quick Entry Panel Field Ordering ✓ shipped
+## v26.11.3 — TCI 2.1, live UTC clock, and the nf0t-core library ✓ shipped
+
+The first release under the week-based CalVer scheme (`YY.MM.W`).
+
+### TCI 2.1 client compliance (#34)
+
+The TCI backend follows the TCI 2.1 parsing rules. It also supports split operation and DX spot clicks. Slices that AetherSDR opens after connecting are now tracked: AetherSDR announces them with `rx_enable` instead of an updated `trx_count`. The logger records the focused receiver's frequency, and records split only while the split receiver is focused. One known gap remains: with transmit on slice A and focus on slice B, the logger records B's frequency (see CLAUDE.md, "Known issues").
+
+### Quick entry panel (#31, #32)
+
+The tab order now follows the operating sequence, and the static Now button is replaced by a live-ticking UTC clock with a lock toggle. See the two milestones below.
+
+### Logbook fixes (#37, #38, #39)
+
+- A headerless ADIF file no longer loses its first record on import.
+- The ARRL Sweepstakes check is written to and read from the ADIF `CHECK` field instead of overwriting the section.
+- A QSO with no station callsign is stored with an empty one instead of being rejected by the database.
+
+These came out of the characterization tests written for the nf0t-core work.
+
+### nf0t-core, phase A (#35, #36, #41, #42)
+
+Logbook, ADIF, callsign/grid/band, database and callsign-lookup code is now a static library at `libs/nf0t-core/`, with its own unit tests run on all three platforms. There is no user-visible change. See the nf0t-core milestone below.
+
+### Release process (#43)
+
+The release procedure is now a repository skill (`.claude/skills/release/`), and the version's third segment is the week of the month (see the CalVer section above).
+
+---
+
+## v26.11.3 — Quick Entry Panel Field Ordering ✓ shipped
 
 Field feedback from extended field use: the tab order and visual layout of `QsoQuickEntryPanel` need to match actual operating sequence.
 
@@ -253,7 +283,7 @@ Band, Freq, Mode, Submode — left to right, matching the suggested tab order fo
 
 ---
 
-## v26.XX.N — Live Clock Time Entry ✓ shipped
+## v26.11.3 — Live Clock Time Entry ✓ shipped
 
 Replaces the static "time + Now button" entry with a continuously running clock, so the operator doesn't need to remember to press Now before logging.
 
@@ -279,6 +309,8 @@ Replaces the static "time + Now button" entry with a continuously running clock,
 ---
 
 ## v26.XX.N — nf0t-core Shared Library
+
+**Status:** steps 1–3 (carve in place) shipped in v26.11.3. Step 4, the split into its own repository, waits until that release has been in use without regressions.
 
 Extract NF0T Logger's application-independent code into **`nf0t-core`**, a static library in its own repository (`NF0T/nf0t-core`, GPL-3.0) consumed as a git submodule. The second consumer is a planned standalone companion app for the 3905 Century Club nets and awards; sharing the core keeps ADIF, callsign handling and the database layer maintained in one place instead of copied.
 
