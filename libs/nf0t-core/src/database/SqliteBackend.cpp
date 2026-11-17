@@ -19,15 +19,19 @@ std::expected<void, QString> SqliteBackend::open(const QVariantMap &config)
     if (!m_db.open())
         return std::unexpected(m_db.lastError().text());
 
-    // Enable WAL mode and foreign keys for better performance/correctness
-    execQuery("PRAGMA journal_mode=WAL");
-    execQuery("PRAGMA foreign_keys=ON");
-    execQuery("PRAGMA synchronous=NORMAL");
-    // A second connection (e.g. the ADIF import worker thread) may write to
-    // this same file concurrently with this one; without a busy timeout a
-    // lock collision fails immediately instead of waiting briefly for it to
-    // clear.
-    execQuery("PRAGMA busy_timeout=5000");
+    // WAL and foreign keys for performance/correctness. busy_timeout: a second
+    // connection (e.g. the ADIF import worker thread) may write to this same
+    // file concurrently; without it a lock collision fails immediately instead
+    // of waiting briefly for it to clear.
+    // These tune the connection; the database is usable without them, so a
+    // failure is logged rather than refusing to open the log.
+    for (const char *pragma : {"PRAGMA journal_mode=WAL",
+                               "PRAGMA foreign_keys=ON",
+                               "PRAGMA synchronous=NORMAL",
+                               "PRAGMA busy_timeout=5000"}) {
+        if (auto r = execQuery(QString::fromLatin1(pragma)); !r)
+            qWarning("SqliteBackend: %s failed: %s", pragma, qPrintable(r.error()));
+    }
 
     return {};
 }
@@ -165,16 +169,21 @@ std::expected<void, QString> SqliteBackend::initSchema()
         )
     )"); !r) return r;
 
-    // Indexes
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_datetime_on    ON qsos(datetime_on)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_callsign       ON qsos(callsign)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_band_mode      ON qsos(band, mode)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_dxcc           ON qsos(dxcc)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_lotw_sent      ON qsos(lotw_qsl_sent)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_lotw_rcvd      ON qsos(lotw_qsl_rcvd)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_eqsl_sent      ON qsos(eqsl_qsl_sent)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_station_call   ON qsos(station_callsign)");
-    execQuery("CREATE INDEX IF NOT EXISTS idx_qsos_sig_info       ON qsos(sig, sig_info)");
+    // Indexes. Part of the schema like the tables above, so a failure fails
+    // initSchema() the same way.
+    for (const char *index : {
+             "CREATE INDEX IF NOT EXISTS idx_qsos_datetime_on    ON qsos(datetime_on)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_callsign       ON qsos(callsign)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_band_mode      ON qsos(band, mode)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_dxcc           ON qsos(dxcc)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_lotw_sent      ON qsos(lotw_qsl_sent)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_lotw_rcvd      ON qsos(lotw_qsl_rcvd)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_eqsl_sent      ON qsos(eqsl_qsl_sent)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_station_call   ON qsos(station_callsign)",
+             "CREATE INDEX IF NOT EXISTS idx_qsos_sig_info       ON qsos(sig, sig_info)"}) {
+        if (auto r = execQuery(QString::fromLatin1(index)); !r)
+            return r;
+    }
 
     // Record version
     QSqlQuery vins(m_db);

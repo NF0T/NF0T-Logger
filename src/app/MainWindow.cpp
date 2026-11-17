@@ -753,7 +753,28 @@ void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
 
     promise.setProgressRange(0, parsed.qsos.size());
 
-    db->beginTransaction();
+    // Inserts are committed in batches, so an insert that succeeded is only
+    // saved once its batch commits. If a commit fails, the batch is rolled
+    // back: those records move from "imported" to "errors", and the import
+    // stops, since later commits on this connection would most likely fail too.
+    int batchImported = 0;
+    auto abandonBatch = [&](const QString &commitError) {
+        if (auto r = db->rollbackTransaction(); !r)
+            qWarning("ADIF import: rollback after a failed commit also failed: %s",
+                     qPrintable(r.error()));
+        result.imported -= batchImported;
+        result.errors   += batchImported;
+        result.errorDetails << QObject::tr(
+            "Import stopped: saving failed, so the last %1 record(s) were not imported: %2")
+            .arg(batchImported).arg(commitError);
+    };
+
+    if (auto r = db->beginTransaction(); !r) {
+        ++result.errors;
+        result.errorDetails << QObject::tr("Could not start the import transaction: %1").arg(r.error());
+        promise.addResult(result);
+        return;
+    }
     int sinceCommit = 0;
 
     for (int i = 0; i < parsed.qsos.size(); ++i) {
@@ -773,11 +794,23 @@ void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
             }
         } else {
             ++result.imported;
+            ++batchImported;
         }
 
         if (++sinceCommit >= kImportBatchSize) {
-            db->commitTransaction();
-            db->beginTransaction();
+            if (auto r = db->commitTransaction(); !r) {
+                abandonBatch(r.error());
+                promise.addResult(result);
+                return;
+            }
+            batchImported = 0;
+            if (auto r = db->beginTransaction(); !r) {
+                ++result.errors;
+                result.errorDetails << QObject::tr(
+                    "Import stopped: could not start the next transaction: %1").arg(r.error());
+                promise.addResult(result);
+                return;
+            }
             sinceCommit = 0;
         }
 
@@ -785,7 +818,8 @@ void runAdifImport(QPromise<AdifImportResult> &promise, const QString &path,
             promise.setProgressValue(i + 1);
     }
 
-    db->commitTransaction();
+    if (auto r = db->commitTransaction(); !r)
+        abandonBatch(r.error());
     promise.addResult(result);
 }
 
