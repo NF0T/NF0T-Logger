@@ -101,23 +101,27 @@ void TestAdif::defaultsAreOmittedAndRoundTrip()
 
 void TestAdif::arrlCheckRoundTrip()
 {
-    // ADIF's Sweepstakes check field is CHECK. The writer emits arrlCheck as
-    // a second ARRL_SECT and the parser reads arrlCheck from ARRL_SECT, so the
-    // check value overwrites the section on re-import.
+    // The Sweepstakes check is ADIF's CHECK field, separate from ARRL_SECT.
     Qso in = minimal();
     in.arrlSect  = QStringLiteral("EMO");
     in.arrlCheck = QStringLiteral("75");
 
     const QString text = AdifWriter::writeString({in});
     QVERIFY(text.contains(QStringLiteral("<ARRL_SECT:3>EMO")));
-    QVERIFY(text.contains(QStringLiteral("<ARRL_SECT:2>75")));
-    QVERIFY(!text.contains(QStringLiteral("<CHECK:")));
+    QVERIFY(text.contains(QStringLiteral("<CHECK:2>75")));
+    QCOMPARE(text.count(QStringLiteral("<ARRL_SECT:")), 1);
 
     const auto r = AdifParser::parseString(text);
     QCOMPARE(r.qsos.size(), 1);
-    QCOMPARE(r.qsos.first().arrlCheck, in.arrlCheck);
-    QEXPECT_FAIL("", "Known defect: arrlCheck is written and read as ARRL_SECT, overwriting the section", Continue);
     QCOMPARE(r.qsos.first().arrlSect, in.arrlSect);
+    QCOMPARE(r.qsos.first().arrlCheck, in.arrlCheck);
+
+    // A section on its own no longer leaks into the check.
+    const auto sectOnly = AdifParser::parseString(QStringLiteral(
+        "<EOH><CALL:4>W1AW<QSO_DATE:8>20260102<TIME_ON:6>030405<ARRL_SECT:3>emo<EOR>"));
+    QCOMPARE(sectOnly.qsos.size(), 1);
+    QCOMPARE(sectOnly.qsos.first().arrlSect, QStringLiteral("EMO"));
+    QVERIFY(sectOnly.qsos.first().arrlCheck.isEmpty());
 }
 
 void TestAdif::appFieldsCanBeExcluded()

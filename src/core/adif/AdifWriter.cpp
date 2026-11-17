@@ -159,7 +159,7 @@ QString AdifWriter::record(const Qso &qso, const Options &opts)
     r += f("STX_STRING",       qso.stxString);
     r += f("PRECEDENCE",       qso.precedence);
     r += f("CLASS",            qso.contestClass);
-    r += f("ARRL_SECT",        qso.arrlCheck);
+    r += f("CHECK",            qso.arrlCheck);
 
     // Special activities
     r += f("SIG",              qso.sig);

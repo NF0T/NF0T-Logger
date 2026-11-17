@@ -101,7 +101,7 @@ inline Qso fullyPopulated()
     q.stxString    = QStringLiteral("007 4");
     q.precedence   = QStringLiteral("A");
     q.contestClass = QStringLiteral("3A");
-    q.arrlCheck    = QStringLiteral("DX");   // must equal arrlSect: see TestAdif::arrlCheckRoundTrip
+    q.arrlCheck    = QStringLiteral("75");
 
     q.sig       = QStringLiteral("POTA");
     q.sigInfo   = QStringLiteral("DE-0001");
