@@ -69,7 +69,7 @@ void QrzXmlLookupProvider::authenticate(const QString &pendingCallsign)
     QUrlQuery q;
     q.addQueryItem(QStringLiteral("username"), m_config.username());
     q.addQueryItem(QStringLiteral("password"), m_config.password());
-    q.addQueryItem(QStringLiteral("agent"),    QStringLiteral("NF0T-Logger"));
+    q.addQueryItem(QStringLiteral("agent"),    m_config.agent);
     url.setQuery(q);
 
     m_authReply = m_nam->get(QNetworkRequest(url));

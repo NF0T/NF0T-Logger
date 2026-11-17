@@ -1102,6 +1102,7 @@ void MainWindow::wireCallsignLookup()
             .enabled  = [] { return Settings::instance().callsignLookupEnabled(); },
             .username = [] { return Settings::instance().qrzXmlUsername(); },
             .password = [] { return Settings::instance().qrzXmlPassword(); },
+            .agent    = QStringLiteral("NF0T-Logger"),
         },
         this);
     m_callsignLookupTimer = new QTimer(this);

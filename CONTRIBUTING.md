@@ -52,6 +52,8 @@ Developer conventions are documented in [CLAUDE.md](CLAUDE.md). The short versio
 - Database operations return `std::expected<T, QString>`, not exceptions
 - All persistent settings go through `Settings::instance()` or `SecureSettings::instance()`
 
+The logbook model, ADIF, callsign/grid/band helpers, database backends and callsign lookup providers live in a static library, `libs/nf0t-core/`, shared with other NF0T applications. It cannot include anything from `src/`: an app dependency there is a compile error by design. Code in the library gets settings and application identity from its caller, never from `Settings`. Its tests are in `libs/nf0t-core/tests/` and run with the rest under `ctest`.
+
 ### Pull requests
 
 1. Fork the repository and create a branch off `develop`

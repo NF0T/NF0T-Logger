@@ -16,11 +16,12 @@ struct QrzXmlConfig {
     std::function<bool()>    enabled;
     std::function<QString()> username;
     std::function<QString()> password;
+    QString                  agent;      // identifies the host application to QRZ
 };
 
 /// QRZ XML Data API provider.
 ///
-/// Auth flow: GET /xml/current/?username=X&password=Y&agent=NF0T-Logger
+/// Auth flow: GET /xml/current/?username=X&password=Y&agent=<QrzXmlConfig::agent>
 /// returns a session key valid for ~24 h. Subsequent lookups use that key.
 /// On Session Timeout the provider re-authenticates once and retries.
 class QrzXmlLookupProvider : public CallsignLookupProvider

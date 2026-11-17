@@ -4,16 +4,17 @@
 # Build system and CI
 CMakeLists.txt @NF0T
 src/CMakeLists.txt @NF0T
+libs/nf0t-core/CMakeLists.txt @NF0T
 .github/ @NF0T
 
 # Core data model and ADIF
-src/core/ @NF0T
+libs/nf0t-core/src/core/ @NF0T
 
 # Database backends
-src/database/ @NF0T
+libs/nf0t-core/src/database/ @NF0T
 
 # Callsign lookup providers — likely area for external contributions
-src/lookup/ @NF0T
+libs/nf0t-core/src/lookup/ @NF0T
 
 # Radio backends — likely area for external contributions
 src/radio/ @NF0T
