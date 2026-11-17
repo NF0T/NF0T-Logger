@@ -28,7 +28,7 @@ jobs:
       - name: Install git
         run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
 
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
       - name: Install build dependencies
         run: |
@@ -53,28 +53,29 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: NF0T-Logger-linux
           path: build/bin/NF0T-Logger
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Windows — MSYS2 MinGW64
-  # Uses the same GCC/MinGW toolchain family as the local Windows dev setup.
-  # All dependencies come from the MSYS2 package repo (pacman).
+  # Windows — MSYS2 UCRT64 (MinGW-w64 GCC on the Universal CRT)
+  # All dependencies come from the MSYS2 package repo (pacman). The job name
+  # still says MinGW64: it is a required status check on main and develop, and
+  # renaming it would block every PR until branch protection is updated.
   # ---------------------------------------------------------------------------
   build-windows:
     name: Windows (MSYS2 MinGW64)
     runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           pacboy: >-
             gcc:p
@@ -99,11 +100,32 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: ctest --test-dir build --output-on-failure
 
+      # Install to a staging directory, then start both programs with only the
+      # Windows system directories on PATH, as on a PC without MSYS2. A missing
+      # DLL makes Windows refuse to start the process (0xC0000135). The
+      # v26.11.3 installer shipped exactly that way, and nothing caught it.
+      - name: Stage install
+        shell: msys2 {0}
+        run: cmake --install build --prefix stage
+
+      - name: Smoke test the staged install (system-only PATH)
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $m = Start-Process stage\bin\log4om-migrate.exe -ArgumentList '--help' -PassThru -Wait -NoNewWindow
+          if ($m.ExitCode -ne 0) { throw ("log4om-migrate failed to start: 0x{0:X8}" -f $m.ExitCode) }
+          $g = Start-Process stage\bin\NF0T-Logger.exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($g.HasExited) { throw ("NF0T-Logger exited early: 0x{0:X8}" -f $g.ExitCode) }
+          Stop-Process $g -Force
+          "Deployed DLLs: " + (Get-ChildItem stage\bin -Recurse -Filter *.dll).Count
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: NF0T-Logger-windows
-          path: build/bin/NF0T-Logger.exe
+          # The staged install: self-contained and runnable on any Windows PC.
+          path: stage/bin/
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -114,7 +136,7 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
       - name: Install dependencies
         run: brew install cmake ninja qt qtkeychain hamlib
@@ -133,7 +155,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: NF0T-Logger-macos
           path: build/bin/NF0T-Logger

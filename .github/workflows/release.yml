@@ -12,7 +12,12 @@ name: Release
 on:
   push:
     branches: [main]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and package only: no signing, no upload, no publish'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,8 +34,11 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
       should_release: ${{ steps.check.outputs.should_release }}
+      # Package jobs run for a real release or a dry run; signing and
+      # publishing only for a real release.
+      build: ${{ steps.check.outputs.build }}
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -39,30 +47,38 @@ jobs:
         run: |
           VERSION=$(grep -m1 '^\s*VERSION [0-9]' CMakeLists.txt | grep -oP '\d+\.\d+\.\d+(\.\d+)?')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Dry run: packaging v$VERSION without signing or publishing"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
             echo "v$VERSION already tagged — nothing to release"
             echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
           else
             echo "v$VERSION is new — releasing"
             echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
   # ---------------------------------------------------------------------------
-  # Windows — MSYS2 MinGW64 NSIS installer
+  # Windows — MSYS2 UCRT64 NSIS installer
   # ---------------------------------------------------------------------------
   package-windows:
     name: Windows NSIS Installer
     needs: detect-version
-    if: needs.detect-version.outputs.should_release == 'true'
+    if: needs.detect-version.outputs.build == 'true'
     runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          msystem: UCRT64
           update: true
           pacboy: >-
             gcc:p
@@ -83,11 +99,31 @@ jobs:
         shell: msys2 {0}
         run: cmake --build build --parallel
 
+      # Install to a staging directory, then start both programs with only the
+      # Windows system directories on PATH, as on a PC without MSYS2. A missing
+      # DLL makes Windows refuse to start the process (0xC0000135). The
+      # v26.11.3 installer shipped exactly that way, and nothing caught it.
+      - name: Stage install
+        shell: msys2 {0}
+        run: cmake --install build --prefix stage
+
+      - name: Smoke test the staged install (system-only PATH)
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $m = Start-Process stage\bin\log4om-migrate.exe -ArgumentList '--help' -PassThru -Wait -NoNewWindow
+          if ($m.ExitCode -ne 0) { throw ("log4om-migrate failed to start: 0x{0:X8}" -f $m.ExitCode) }
+          $g = Start-Process stage\bin\NF0T-Logger.exe -PassThru
+          Start-Sleep -Seconds 10
+          if ($g.HasExited) { throw ("NF0T-Logger exited early: 0x{0:X8}" -f $g.ExitCode) }
+          Stop-Process $g -Force
+          "Deployed DLLs: " + (Get-ChildItem stage\bin -Recurse -Filter *.dll).Count
+
       - name: Package (NSIS)
         shell: msys2 {0}
         run: cd build && cpack -G NSIS
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: windows-installer
           path: build/NF0T-Logger-*-win64.exe
@@ -99,7 +135,7 @@ jobs:
   package-linux:
     name: Linux AppImage
     needs: detect-version
-    if: needs.detect-version.outputs.should_release == 'true'
+    if: needs.detect-version.outputs.build == 'true'
     runs-on: ubuntu-latest
     container:
       image: debian:trixie
@@ -108,7 +144,7 @@ jobs:
       - name: Install git and ca-certificates
         run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git wget
 
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v7.0.1
 
       - name: Install build dependencies
         run: |
@@ -148,7 +184,7 @@ jobs:
           find . -maxdepth 1 -name "NF0T*Logger*.AppImage" | head -1 \
             | xargs -I{} mv {} NF0T-Logger-${LINUXDEPLOY_OUTPUT_VERSION}-x86_64.AppImage
 
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: linux-appimage
           path: NF0T-Logger-*-x86_64.AppImage
@@ -161,11 +197,11 @@ jobs:
     name: Sign and Upload to Release
     needs: [detect-version, package-windows, package-linux]
     if: needs.detect-version.outputs.should_release == 'true'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.2
         with:
           merge-multiple: true
 
