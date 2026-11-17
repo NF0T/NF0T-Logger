@@ -56,14 +56,14 @@ Every suite was mutation-checked: breaking the code under test fails it.
 
 Gate: tests pass on Linux, Windows and macOS CI.
 
-#### Defects found by A1 (recorded, not fixed)
+#### Defects found by A1
 
-A1 makes no production changes. These are pinned with `QEXPECT_FAIL` or a "current behaviour" test and should be fixed in their own PRs before A3. Fixing a `QEXPECT_FAIL` one turns it into an XPASS, which fails the test until the marker is removed.
+A1 made no production changes; it pinned these with `QEXPECT_FAIL` or a "current behaviour" test. All three are now fixed, each in its own PR, and their tests assert the corrected behaviour.
 
-- **ADIF headerless files lose their first record.** `AdifParser` only collects fields after `<EOH>` or the first `<EOR>`, contrary to its own comment. This includes `AdifWriter`'s own `includeHeader = false` output. `QrzService` parses the QRZ fetch response with the same parser; if that response has no header, the first confirmation of every download is dropped (unverified: needs a live QRZ response).
-- **ADIF Sweepstakes check overwrites the ARRL section.** `arrlCheck` is written as a second `ARRL_SECT` (ADIF's field is `CHECK`) and read back from `ARRL_SECT`, so on re-import the check replaces the section.
-- **A QSO with no station callsign cannot be stored.** `station_callsign` is bound without the empty-to-NULL helper, so a null `QString` violates `NOT NULL`. Every logging path fills it from Settings, so this bites only when no station callsign is configured.
-- Behaviour worth a decision rather than a fix, pinned as-is:
+- [x] **ADIF headerless files lost their first record.** `AdifParser` only collected fields after `<EOH>` or the first `<EOR>`, including for `AdifWriter`'s own `includeHeader = false` output. Fixed in #37: with no `<EOH>` in the input, every field belongs to a record. Whether QRZ's fetch response was affected (it is parsed by the same code) was never verified against a live response; it is handled either way.
+- [x] **ADIF Sweepstakes check overwrote the ARRL section.** `arrlCheck` was written as a second `ARRL_SECT` and read back from `ARRL_SECT`. Fixed in #38: it is ADIF's `CHECK` field on both sides. QSOs imported before the fix may hold a section in `arrl_check`; they cannot be told apart from typed checks, so they are not repaired.
+- [x] **A QSO with no station callsign could not be stored.** A null `station_callsign` violated `NOT NULL`. Fixed in #39: INSERT and UPDATE coalesce it to `''`.
+- Behaviour worth a decision rather than a fix, still pinned as-is:
   - an exact `=CALL` match on the base call beats an outer prefix (`VE3/W1AW` resolves to W1AW's entity);
   - a call-shaped prefix such as `VP2E/W1AW` is not recognised as a prefix;
   - `54.000` MHz maps to 6m, so 5m's default frequency maps back to 6m;
