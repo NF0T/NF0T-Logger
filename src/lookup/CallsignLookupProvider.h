@@ -27,7 +27,7 @@ public:
     virtual QString displayName() const = 0;
 
     /// Returns true if the provider is configured and ready to accept queries.
-    /// Typically checks that credentials are present in SecureSettings.
+    /// Typically checks that the host application has supplied credentials.
     virtual bool isAvailable() const = 0;
 
     /// Begin an asynchronous lookup for callsign.

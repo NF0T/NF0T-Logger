@@ -73,8 +73,8 @@ For A3: `AdifWriter.h` defaults `programVersion` to the app's `APP_VERSION` comp
 
 ### A2. Decouple the lookup providers and the table model (behaviour-neutral)
 
-- [ ] Move `core/logbook/QsoTableModel.*` to `src/ui/QsoTableModel.*`; update the two includes (`MainWindow.cpp`, `QslColumns.cpp`).
-- [ ] Give the providers **pull-based** configuration through injected callables, so values are still read at call time exactly as `Settings::instance()` is read today, and a credential change takes effect without re-wiring:
+- [x] Move `core/logbook/QsoTableModel.*` to `src/ui/QsoTableModel.*`; update the two includes (`MainWindow.cpp`, `QslColumns.cpp`).
+- [x] Give the providers **pull-based** configuration through injected callables, so values are still read at call time exactly as `Settings::instance()` is read today, and a credential change takes effect without re-wiring:
 
   ```cpp
   // lookup/CtyDatLookupProvider.h
@@ -94,8 +94,8 @@ For A3: `AdifWriter.h` defaults `programVersion` to the app's `APP_VERSION` comp
   explicit QrzXmlLookupProvider(QrzXmlConfig config, QObject *parent = nullptr);
   ```
 
-- [ ] `MainWindow::wireCallsignLookup()` builds those configs from lambdas over `Settings::instance()`. This is the only call site.
-- [ ] Remove `#include "app/settings/Settings.h"` from everything under `core/`, `database/`, `lookup/`.
+- [x] `MainWindow::wireCallsignLookup()` builds those configs from lambdas over `Settings::instance()`. This is the only call site.
+- [x] Remove `#include "app/settings/Settings.h"` from everything under `core/`, `database/`, `lookup/`. `test_ctydat` no longer links Settings or QtKeychain, and a new `test_qrzxml` covers `QrzXmlLookupProvider::isAvailable()`.
 
 Gate: A1 tests still pass; manual check that QRZ lookup and CTY.dat enrichment behave as before (including the Settings → Update CTY.dat path).
 

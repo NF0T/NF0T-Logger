@@ -2,19 +2,15 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 //
 // Characterization tests: pin CtyDatLookupProvider behaviour before it moves
-// into nf0t-core. The provider reads its file path from Settings today; A2
-// replaces that with injected configuration, and only makeProvider() below
-// should need to change.
+// into nf0t-core. Configuration is injected through CtyDatConfig.
 
 #include <memory>
 
-#include <QSettings>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
-#include "app/settings/Settings.h"
 #include "lookup/CtyDatLookupProvider.h"
 
 class TestCtyDat : public QObject
@@ -26,7 +22,8 @@ private slots:
 
     void loadsCustomFile();
     void needsMoreThan100Entities();
-    void disabledInSettingsIsUnavailable();
+    void disabledIsUnavailable();
+    void enabledAndPathAreReadThroughConfig();
     void lookup_data();
     void lookup();
     void lookupFailures();
@@ -37,6 +34,7 @@ private:
 
     QTemporaryDir m_dir;
     QString m_fixture;
+    bool m_enabled = true;
 };
 
 namespace {
@@ -57,9 +55,8 @@ void TestCtyDat::initTestCase()
 {
     QVERIFY(m_dir.isValid());
     qRegisterMetaType<CallsignLookupResult>();
+    // Keeps the provider's AppLocalDataLocation fallback away from a real install.
     QStandardPaths::setTestModeEnabled(true);
-    QSettings::setDefaultFormat(QSettings::IniFormat);
-    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_dir.filePath(QStringLiteral("settings")));
     QCoreApplication::setOrganizationName(QStringLiteral("NF0T-Tests"));
     QCoreApplication::setApplicationName(QStringLiteral("test_ctydat"));
 
@@ -81,9 +78,12 @@ QString TestCtyDat::writeFixture(const QString &name, int fillerCount)
 
 std::unique_ptr<CtyDatLookupProvider> TestCtyDat::makeProvider(const QString &path)
 {
-    Settings::instance().setCtyDatCustomPath(path);
-    Settings::instance().setCtyDatEnabled(true);
-    return std::make_unique<CtyDatLookupProvider>();
+    m_enabled = true;
+    return std::make_unique<CtyDatLookupProvider>(CtyDatConfig{
+        .enabled     = [this] { return m_enabled; },
+        .customPath  = [path] { return path; },
+        .bundledPath = {},
+    });
 }
 
 void TestCtyDat::loadsCustomFile()
@@ -108,13 +108,33 @@ void TestCtyDat::needsMoreThan100Entities()
     QCOMPARE(failed.count(), 1);
 }
 
-void TestCtyDat::disabledInSettingsIsUnavailable()
+void TestCtyDat::disabledIsUnavailable()
 {
+    // enabled() is read on every call, not captured at construction.
     const auto p = makeProvider(m_fixture);
-    Settings::instance().setCtyDatEnabled(false);
+    m_enabled = false;
     QVERIFY(!p->isAvailable());
-    Settings::instance().setCtyDatEnabled(true);
+    m_enabled = true;
     QVERIFY(p->isAvailable());
+}
+
+void TestCtyDat::enabledAndPathAreReadThroughConfig()
+{
+    // Unset callables mean "disabled" and "no custom path"; with no bundled
+    // file either, nothing loads.
+    CtyDatLookupProvider bare{CtyDatConfig{}};
+    QVERIFY(!bare.isAvailable());
+    QCOMPARE(bare.entityCount(), 0);
+
+    // A missing custom path falls through to the bundled path, reported as such.
+    CtyDatLookupProvider fallback{CtyDatConfig{
+        .enabled     = [] { return true; },
+        .customPath  = [this] { return m_dir.filePath(QStringLiteral("missing.dat")); },
+        .bundledPath = m_fixture,
+    }};
+    QVERIFY(fallback.isAvailable());
+    QCOMPARE(fallback.entityCount(), 101);
+    QCOMPARE(fallback.fileDate(), QStringLiteral("bundled"));
 }
 
 void TestCtyDat::lookup_data()

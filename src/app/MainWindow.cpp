@@ -37,7 +37,7 @@
 #include "core/logbook/QsoFilter.h"
 #include "database/DatabaseInterface.h"
 #include "core/adif/AdifWriter.h"
-#include "core/logbook/QsoTableModel.h"
+#include "ui/QsoTableModel.h"
 #include "core/Maidenhead.h"
 #include "database/MariaDbBackend.h"
 #include "database/SqliteBackend.h"
@@ -1090,8 +1090,20 @@ void MainWindow::wireDigitalListener(DigitalListenerService *svc)
 
 void MainWindow::wireCallsignLookup()
 {
-    m_ctyProvider         = new CtyDatLookupProvider(this);
-    m_qrzProvider         = new QrzXmlLookupProvider(this);
+    m_ctyProvider = new CtyDatLookupProvider(
+        CtyDatConfig{
+            .enabled     = [] { return Settings::instance().ctyDatEnabled(); },
+            .customPath  = [] { return Settings::instance().ctyDatCustomPath(); },
+            .bundledPath = QStringLiteral(":/data/cty.dat"),
+        },
+        this);
+    m_qrzProvider = new QrzXmlLookupProvider(
+        QrzXmlConfig{
+            .enabled  = [] { return Settings::instance().callsignLookupEnabled(); },
+            .username = [] { return Settings::instance().qrzXmlUsername(); },
+            .password = [] { return Settings::instance().qrzXmlPassword(); },
+        },
+        this);
     m_callsignLookupTimer = new QTimer(this);
     m_callsignLookupTimer->setSingleShot(true);
     m_callsignLookupTimer->setInterval(600);

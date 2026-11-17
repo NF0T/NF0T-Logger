@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Ryan Butler (NF0T)
 #include "QrzXmlLookupProvider.h"
-#include "app/settings/Settings.h"
+
+#include <utility>
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -12,17 +13,18 @@
 
 static constexpr const char *QRZ_API_URL = "https://xmldata.qrz.com/xml/current/";
 
-QrzXmlLookupProvider::QrzXmlLookupProvider(QObject *parent)
+QrzXmlLookupProvider::QrzXmlLookupProvider(QrzXmlConfig config, QObject *parent)
     : CallsignLookupProvider(parent)
+    , m_config(std::move(config))
     , m_nam(new QNetworkAccessManager(this))
 {}
 
 bool QrzXmlLookupProvider::isAvailable() const
 {
-    const Settings &s = Settings::instance();
-    return s.callsignLookupEnabled()
-        && !s.qrzXmlUsername().isEmpty()
-        && !s.qrzXmlPassword().isEmpty();
+    return m_config.enabled && m_config.username && m_config.password
+        && m_config.enabled()
+        && !m_config.username().isEmpty()
+        && !m_config.password().isEmpty();
 }
 
 void QrzXmlLookupProvider::lookup(const QString &callsign)
@@ -65,8 +67,8 @@ void QrzXmlLookupProvider::authenticate(const QString &pendingCallsign)
 
     QUrl url{QLatin1String(QRZ_API_URL)};
     QUrlQuery q;
-    q.addQueryItem(QStringLiteral("username"), Settings::instance().qrzXmlUsername());
-    q.addQueryItem(QStringLiteral("password"), Settings::instance().qrzXmlPassword());
+    q.addQueryItem(QStringLiteral("username"), m_config.username());
+    q.addQueryItem(QStringLiteral("password"), m_config.password());
     q.addQueryItem(QStringLiteral("agent"),    QStringLiteral("NF0T-Logger"));
     url.setQuery(q);
 

@@ -59,7 +59,6 @@ nf0t_add_test(test_sqlite_backend
     LIBS Qt6::Sql
 )
 
-# Settings is linked only until step A2 injects the provider's configuration.
 nf0t_add_test(test_ctydat
     SOURCES
         test_ctydat.cpp
@@ -68,9 +67,14 @@ nf0t_add_test(test_ctydat
         ${NF0T_SRC}/lookup/CallsignLookupProvider.h
         ${NF0T_SRC}/lookup/CallsignLookupResult.h
         ${NF0T_SRC}/core/Callsign.cpp
-        ${NF0T_SRC}/app/settings/Settings.cpp
-        ${NF0T_SRC}/app/settings/Settings.h
-        ${NF0T_SRC}/app/settings/SecureSettings.cpp
-        ${NF0T_SRC}/app/settings/SecureSettings.h
-    LIBS Qt6::Network qt6keychain
+)
+
+nf0t_add_test(test_qrzxml
+    SOURCES
+        test_qrzxml.cpp
+        ${NF0T_SRC}/lookup/QrzXmlLookupProvider.cpp
+        ${NF0T_SRC}/lookup/QrzXmlLookupProvider.h
+        ${NF0T_SRC}/lookup/CallsignLookupProvider.h
+        ${NF0T_SRC}/lookup/CallsignLookupResult.h
+    LIBS Qt6::Network
 )
