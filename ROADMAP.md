@@ -70,6 +70,15 @@ Starting with the first release after v0.4.0, NF0T Logger will adopt **CalVer** 
 
 Existing tags (`v0.1.0` through `v0.4.0`) remain unchanged in git history. The switch took effect with `v26.6.1`.
 
+**Amended November 2026 — week-based third segment.** From the first release after `v26.9.2`, the scheme is `YY.MM.W`. `W` is the week of the month, where weeks run Sunday–Saturday and the (possibly partial) week containing the 1st is week 1, so a month has 4–6 weeks. The fourth segment now means "another release in the same week", hotfix or not:
+
+| Tag | Meaning |
+|---|---|
+| `v26.11.3` | Released in the third week of November 2026 (Sun 15 – Sat 21) |
+| `v26.11.3.1` | A second release, or a hotfix, in that same week |
+
+This is a project convention: standard CalVer's `WW` is week of the *year*. Tags already released under the old scheme are unchanged.
+
 ---
 
 ## v26.XX.N — Release Packaging and Distribution ✓ shipped

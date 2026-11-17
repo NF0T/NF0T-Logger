@@ -31,7 +31,9 @@ develop    ●──bugfix──feature──●──●──
 
 **For features:** branch off `develop`, merge back to `develop` when complete. `develop` is your integration surface — you can build it at any point to see the full picture of the next release.
 
-**For releases:** merge `develop` into `main` with `--no-ff`, then tag.
+**For releases:** a version-bump PR into `develop`, then a `develop` → `main` PR merged with a merge commit. The push to `main` triggers `.github/workflows/release.yml`, which builds, signs, uploads and publishes the release itself. **Do not create tags or publish releases by hand:** GitHub's Immutable Releases permanently burns a tag name the moment its release is published, so a premature publish cannot be undone. The full procedure is in [`.claude/skills/release/SKILL.md`](.claude/skills/release/SKILL.md).
+
+Versions are CalVer `YY.MM.W`, where `W` is the week of the month: weeks run Sunday–Saturday, and the week containing the 1st is week 1. A second release in the same week adds a fourth segment (`26.11.3.1`).
 
 ## Submitting code
 
