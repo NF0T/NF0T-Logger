@@ -229,7 +229,7 @@ Qso AdifParser::toQso(const FieldMap &f, QStringList &warn)
     q.stxString    = val("STX_STRING");
     q.precedence   = val("PRECEDENCE").toUpper();
     q.contestClass = val("CLASS").toUpper();
-    q.arrlCheck    = val("ARRL_SECT").toUpper();  // ARRL_SECT doubles as section in Sweepstakes
+    q.arrlCheck    = val("CHECK").toUpper();
 
     // --- Special activities ---
     q.sig       = val("SIG").toUpper();

@@ -185,7 +185,6 @@ void TestSqliteBackend::v2MigrationNormalisesModes()
 void TestSqliteBackend::insertFetchRoundTripIsLossless()
 {
     Qso in = QsoFixtures::fullyPopulated();
-    in.arrlCheck = QStringLiteral("75");   // the DB, unlike ADIF, keeps it separate
 
     const auto id = m_db->insertQso(in);
     QVERIFY2(id.has_value(), qPrintable(errorOf(id)));
