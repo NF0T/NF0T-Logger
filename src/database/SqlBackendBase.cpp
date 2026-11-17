@@ -43,7 +43,7 @@ INSERT INTO qsos (
     :name, :contacted_op, :qth, :gridsquare, :country, :state, :county, :cont,
     :dxcc, :cq_zone, :itu_zone, :pfx, :arrl_sect,
     :lat, :lon, :distance, :age, :eq_call,
-    :station_callsign, :operator_call, :owner_callsign,
+    COALESCE(:station_callsign, ''), :operator_call, :owner_callsign,
     :my_name, :my_gridsquare, :my_city, :my_state, :my_county, :my_country,
     :my_dxcc, :my_cq_zone, :my_itu_zone, :my_lat, :my_lon,
     :tx_pwr, :rx_pwr, :antenna, :ant_az, :ant_el, :ant_path, :rig,
@@ -91,7 +91,7 @@ UPDATE qsos SET
     distance        = :distance,
     age             = :age,
     eq_call         = :eq_call,
-    station_callsign = :station_callsign,
+    station_callsign = COALESCE(:station_callsign, ''),
     operator_call   = :operator_call,
     owner_callsign  = :owner_callsign,
     my_name         = :my_name,
@@ -478,7 +478,10 @@ void SqlBackendBase::bindQso(QSqlQuery &q, const Qso &qso)
     q.bindValue(":distance",         ov(qso.distance));
     q.bindValue(":age",              ov(qso.age));
     q.bindValue(":eq_call",          sv(qso.eqCall));
-    q.bindValue(":station_callsign", qso.stationCallsign);
+    // NOT NULL DEFAULT '': an unset station callsign is stored as ''.
+    // COALESCE in the SQL, not the binding, so no driver-specific null/empty
+    // QString distinction is involved.
+    q.bindValue(":station_callsign", sv(qso.stationCallsign));
     q.bindValue(":operator_call",    sv(qso.operatorCall));
     q.bindValue(":owner_callsign",   sv(qso.ownerCallsign));
     q.bindValue(":my_name",          sv(qso.myName));
