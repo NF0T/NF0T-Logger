@@ -2,10 +2,9 @@
 // Copyright (C) 2026 Ryan Butler (NF0T)
 //
 // Characterization tests: pin AdifParser / AdifWriter behaviour before they
-// move into nf0t-core. QEXPECT_FAIL marks a known defect that A1 records but
-// does not fix (no production changes in this step); fixing it turns the
-// expected failure into an XPASS, which fails the test and forces the
-// marker to be removed.
+// move into nf0t-core. To record a known defect without fixing it, mark the
+// failing check with QEXPECT_FAIL: a later fix turns it into an XPASS, which
+// fails the test until the marker is removed.
 
 #include <QTemporaryDir>
 #include <QtTest>
