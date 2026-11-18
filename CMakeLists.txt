@@ -64,6 +64,18 @@ add_subdirectory(src)
 add_subdirectory(tools/log4om-migrate)
 add_subdirectory(tests)
 
+# Windows: make the installed bin/ self-contained (Qt, its dependencies, the
+# compiler runtime, qtkeychain). Declared after every add_subdirectory() so it
+# runs once all executables are installed (CMP0082 orders install rules).
+if(WIN32)
+    get_filename_component(_NF0T_TOOLCHAIN_BIN "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    install(CODE "set(NF0T_DEPLOY_DIRS
+        \"${_NF0T_TOOLCHAIN_BIN}\"
+        \"$<TARGET_FILE_DIR:Qt6::Core>\"
+        \"$<TARGET_FILE_DIR:qt6keychain>\")")
+    install(SCRIPT "${CMAKE_SOURCE_DIR}/packaging/windows/DeployRuntime.cmake")
+endif()
+
 # ── Packaging ────────────────────────────────────────────────────────────────
 set(CPACK_PACKAGE_NAME              "NF0T-Logger")
 set(CPACK_PACKAGE_VENDOR            "Ryan Butler (NF0T)")
