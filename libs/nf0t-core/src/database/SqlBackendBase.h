@@ -22,23 +22,23 @@ public:
     void close()  override;
     bool isOpen() const override;
 
-    std::expected<qint64, QString> insertQso(Qso &qso)           override;
-    std::expected<void,   QString> updateQso(const Qso &qso)     override;
-    std::expected<void,   QString> deleteQso(qint64 id)          override;
-    std::expected<void,   QString> clearQsos()                   override;
+    [[nodiscard]] std::expected<qint64, QString> insertQso(Qso &qso)           override;
+    [[nodiscard]] std::expected<void,   QString> updateQso(const Qso &qso)     override;
+    [[nodiscard]] std::expected<void,   QString> deleteQso(qint64 id)          override;
+    [[nodiscard]] std::expected<void,   QString> clearQsos()                   override;
 
-    std::expected<void, QString> beginTransaction()    override;
-    std::expected<void, QString> commitTransaction()   override;
-    std::expected<void, QString> rollbackTransaction() override;
-    std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) override;
-    std::expected<int,        QString> qsoCount()                override;
-    std::expected<int,        QString> countQsos(const QsoFilter &filter)    override;
+    [[nodiscard]] std::expected<void, QString> beginTransaction()    override;
+    [[nodiscard]] std::expected<void, QString> commitTransaction()   override;
+    [[nodiscard]] std::expected<void, QString> rollbackTransaction() override;
+    [[nodiscard]] std::expected<QList<Qso>, QString> fetchQsos(const QsoFilter &filter = {}) override;
+    [[nodiscard]] std::expected<int,        QString> qsoCount()                override;
+    [[nodiscard]] std::expected<int,        QString> countQsos(const QsoFilter &filter)    override;
 
 protected:
     QSqlDatabase m_db;
     QString      m_connectionName;
 
-    std::expected<void, QString> execQuery(const QString &sql);
+    [[nodiscard]] std::expected<void, QString> execQuery(const QString &sql);
 
 private:
     static void bindQso(QSqlQuery &q, const Qso &qso);

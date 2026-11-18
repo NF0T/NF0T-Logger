@@ -9,6 +9,6 @@
 class SqliteBackend : public SqlBackendBase
 {
 public:
-    std::expected<void, QString> open(const QVariantMap &config) override;
-    std::expected<void, QString> initSchema() override;
+    [[nodiscard]] std::expected<void, QString> open(const QVariantMap &config) override;
+    [[nodiscard]] std::expected<void, QString> initSchema() override;
 };
