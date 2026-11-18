@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Weekly PRs bumping the GitHub Actions used in .github/workflows/.
+  # Security-update PRs (enabled in repo settings) always target the default
+  # branch, main; target-branch below applies only to these version updates.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    target-branch: "develop"
+    open-pull-requests-limit: 5
+    # The default labels (dependencies, github_actions) are not release-drafter
+    # categories, so the bumps would land uncategorised at the top of the notes.
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    # CodeQL's init and analyze must run the same version; bump them together.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
