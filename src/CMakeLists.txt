@@ -130,19 +130,5 @@ if(UNIX AND NOT APPLE)
         DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps")
 endif()
 
-if(WIN32)
-    install(CODE "
-        find_program(_WDQT windeployqt6 REQUIRED)
-        execute_process(
-            COMMAND \"\${_WDQT}\"
-                --no-translations
-                --no-system-d3d-compiler
-                --no-compiler-runtime
-                \"\${CMAKE_INSTALL_PREFIX}/bin/NF0T-Logger.exe\"
-            RESULT_VARIABLE _R
-        )
-        if(NOT _R EQUAL 0)
-            message(FATAL_ERROR \"windeployqt6 failed: \${_R}\")
-        endif()
-    ")
-endif()
+# Windows runtime deployment (windeployqt + dependent DLLs) is in the top-level
+# CMakeLists.txt, so that it runs after every executable has been installed.
