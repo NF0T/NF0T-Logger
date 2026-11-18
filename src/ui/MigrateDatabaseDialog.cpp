@@ -287,6 +287,15 @@ static std::unique_ptr<DatabaseInterface> openTarget(const QString &key,
     return target;
 }
 
+// Rolls back the dry-run transaction. A failed rollback is logged but not
+// fatal: the caller releases the connection immediately afterwards, and both
+// SQLite and MariaDB discard an uncommitted transaction when it closes.
+static void discardDryRun(DatabaseInterface &target)
+{
+    if (auto r = target.rollbackTransaction(); !r)
+        qWarning("MigrateDatabaseDialog: dry-run rollback failed: %s", qPrintable(r.error()));
+}
+
 // ---------------------------------------------------------------------------
 // Dry run
 // ---------------------------------------------------------------------------
@@ -342,7 +351,7 @@ void MigrateDatabaseDialog::onDryRun()
 
     const auto fetchResult = m_source->fetchQsos();
     if (!fetchResult) {
-        target->rollbackTransaction();
+        discardDryRun(*target);
         m_configErrorLabel->setText(
             tr("Could not read source QSOs: %1").arg(fetchResult.error()));
         m_configErrorLabel->show();
@@ -367,7 +376,7 @@ void MigrateDatabaseDialog::onDryRun()
         }
     }
 
-    target->rollbackTransaction();
+    discardDryRun(*target);
     // target goes out of scope here — its connection is released
 
     m_dryRunTransferred = transferred;
