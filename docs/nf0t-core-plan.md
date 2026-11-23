@@ -122,6 +122,12 @@ Gate: Linux, Windows and macOS CI green; the app binary behaves identically. Smo
 
 Release normally from `develop` → `main`. Phase B starts only after a release containing A3 has been used for a while without regressions.
 
+- [x] Shipped in v26.11.3 (2026-11-17). Its Windows installer could not start without MSYS2 (fixed by #46), so the bake runs on **v26.11.4**.
+- **Bake** (owner's decision, 2026-11-23): two weeks of daily use from v26.11.4's publication, with no regressions in ADIF, callsign lookup or logging. Meanwhile:
+  - The **schema extension point** decision and **B1** go ahead. Neither touches this app.
+  - **B2** waits on its own branch, rebased on `develop`, and merges when the bake ends.
+  - Regression fixes go to `develop` and ship as a normal release.
+
 ## Phase B — split into `NF0T/nf0t-core`
 
 ### B1. Create the library repository with history

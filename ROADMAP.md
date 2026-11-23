@@ -230,6 +230,28 @@ A user-configured custom SQLite path was silently ignored in favor of the defaul
 
 ---
 
+## v26.11.4 — Working Windows installer and ADIF import fix ✓ shipped
+
+A fix release for v26.11.3.
+
+### Windows installer (#46)
+
+The v26.11.3 installer, and almost certainly every earlier one, shipped only Qt's own DLLs. It left out the compiler runtime, qtkeychain and the libraries Qt itself depends on (ICU, zlib, zstd, freetype, harfbuzz and others). So the installed program could not start on a PC without MSYS2: Windows refused to start it with `0xC0000135`, "DLL not found". The installer now deploys every runtime DLL the programs load. It also includes `libmariadb.dll`, so the MariaDB backend works on Windows for the first time.
+
+CI only ever built the installer and never ran it, which is why nothing caught this. Every Windows CI run and release build now installs to a staging folder and starts both programs with only the Windows system folders on PATH. `release.yml` also gained a dry-run mode that builds and packages without signing or publishing.
+
+The Windows build moved from MSYS2's deprecated MINGW64 environment to UCRT64, and the GitHub Actions were updated. Dependabot now proposes Actions updates weekly (#48).
+
+### ADIF import (#47)
+
+Imports are saved in batches. If saving a batch failed, those records were rolled back but still counted as imported. They are now counted as errors, the import summary explains why, and the import stops. Database results can no longer be ignored without a compiler warning on any platform.
+
+### nf0t-core bake
+
+v26.11.4 is the first release whose Windows installer actually runs the nf0t-core library, so it starts the bake before the repository split (see the nf0t-core milestone below).
+
+---
+
 ## v26.11.3 — TCI 2.1, live UTC clock, and the nf0t-core library ✓ shipped
 
 The first release under the week-based CalVer scheme (`YY.MM.W`).
@@ -310,7 +332,7 @@ Replaces the static "time + Now button" entry with a continuously running clock,
 
 ## v26.XX.N — nf0t-core Shared Library
 
-**Status:** steps 1–3 (carve in place) shipped in v26.11.3. Step 4, the split into its own repository, waits until that release has been in use without regressions.
+**Status:** steps 1–3 (carve in place) shipped in v26.11.3. The v26.11.3 Windows installer could not run, so the bake runs on **v26.11.4**: two weeks of daily use from its publication, with no regressions in ADIF, callsign lookup or logging. During the bake, creating the new repository (B1) and deciding the schema extension point can go ahead, since neither touches this app. The submodule swap (B2) waits on its own branch until the bake ends. Regression fixes go to `develop` as normal.
 
 Extract NF0T Logger's application-independent code into **`nf0t-core`**, a static library in its own repository (`NF0T/nf0t-core`, GPL-3.0) consumed as a git submodule. The second consumer is a planned standalone companion app for the 3905 Century Club nets and awards; sharing the core keeps ADIF, callsign handling and the database layer maintained in one place instead of copied.
 
