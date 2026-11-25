@@ -332,7 +332,7 @@ Replaces the static "time + Now button" entry with a continuously running clock,
 
 ## v26.XX.N — nf0t-core Shared Library
 
-**Status:** steps 1–3 (carve in place) shipped in v26.11.3. The v26.11.3 Windows installer could not run, so the bake runs on **v26.11.4**: two weeks of daily use from its publication, with no regressions in ADIF, callsign lookup or logging. During the bake, creating the new repository (B1) and deciding the schema extension point can go ahead, since neither touches this app. The submodule swap (B2) waits on its own branch until the bake ends. Regression fixes go to `develop` as normal.
+**Status:** steps 1–3 (carve in place) shipped in v26.11.3. The v26.11.3 Windows installer could not run, so the bake runs on **v26.11.4**: two weeks of daily use from its publication, with no regressions in ADIF, callsign lookup or logging. During the bake, B1 and the schema decision went ahead, since neither touches this app: [NF0T/nf0t-core](https://github.com/NF0T/nf0t-core) was created on 2026-11-25 and tagged `v26.11.4`, and CC Companion will own its own schema. The submodule swap (B2) waits on its own branch until the bake ends. Regression fixes go to `develop` as normal.
 
 Extract NF0T Logger's application-independent code into **`nf0t-core`**, a static library in its own repository (`NF0T/nf0t-core`, GPL-3.0) consumed as a git submodule. The second consumer is a planned standalone companion app for the 3905 Century Club nets and awards; sharing the core keeps ADIF, callsign handling and the database layer maintained in one place instead of copied.
 

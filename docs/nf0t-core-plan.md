@@ -132,12 +132,14 @@ Release normally from `develop` → `main`. Phase B starts only after a release 
 
 ### B1. Create the library repository with history
 
-- [ ] Extract with `git filter-repo`, including the **pre-move** paths so `git log --follow` survives the A3 move:
+Done 2026-11-25: [NF0T/nf0t-core](https://github.com/NF0T/nf0t-core), tagged `v26.11.4`. Extracted from `develop` at the schema-decision merge. The library's files land back at their pre-A3 paths, so the A3 move vanishes from its history and plain `git log` reaches back to 2026-04-07. PR references in commit messages were rewritten to `NF0T/NF0T-Logger#N`, because `#N` would otherwise link to the new repository's own issues. It has a single `main` branch, protected by the three CI checks.
+
+- [x] Extract with `git filter-repo`, including the **pre-move** paths so `git log --follow` survives the A3 move:
   `--path libs/nf0t-core/ --path src/core/adif/ --path src/core/Callsign.cpp … --path-rename libs/nf0t-core/:`
   (list every file from the "Move" rows; leave out `QsoTableModel`).
-- [ ] Add `LICENSE` (GPL-3.0, same as the app), `README.md` (purpose, build, consumers), `CLAUDE.md` (conventions copied from the app: `std::expected` DB results, `QStringLiteral`, no `M_PI`, migration rules).
-- [ ] CI: build and test on Linux, Windows and macOS.
-- [ ] Tag the first version with CalVer to match the app (e.g. `v26.12.1`).
+- [x] Add `LICENSE` (GPL-3.0, same as the app), `README.md` (purpose, build, consumers), `CLAUDE.md` (conventions copied from the app: `std::expected` DB results, `QStringLiteral`, no `M_PI`, migration rules).
+- [x] CI: build and test on Linux, Windows and macOS.
+- [x] Tag the first version with CalVer to match the app: `v26.11.4` (`YY.MM.W`, the same scheme as the app's releases).
 
 ### B2. Re-integrate as a submodule
 
